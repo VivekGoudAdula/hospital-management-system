@@ -18,7 +18,7 @@ const PrivateRoute = ({ children, adminOnly = false }: { children: React.ReactNo
     return <Navigate to="/login" replace />;
   }
   
-  if (adminOnly && role !== 'Admin') {
+  if (adminOnly && role?.toLowerCase() !== 'admin') {
     return <Navigate to="/" replace />;
   }
   
@@ -26,16 +26,23 @@ const PrivateRoute = ({ children, adminOnly = false }: { children: React.ReactNo
 };
 
 export default function App() {
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, role } = useAuthStore();
+
+  const getHomeRedirect = () => {
+    if (role?.toLowerCase() === 'admin') return '/dashboard';
+    if (role?.toLowerCase() === 'doctor') return '/doctor/dashboard';
+    return '/dashboard';
+  };
 
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/login" element={!isAuthenticated ? <Login /> : <Navigate to="/" />} />
+        <Route path="/login" element={!isAuthenticated ? <Login /> : <Navigate to={getHomeRedirect()} />} />
         
         <Route element={<PrivateRoute><MainLayout /></PrivateRoute>}>
-          <Route path="/" element={<Navigate to="/dashboard" />} />
+          <Route path="/" element={<Navigate to={getHomeRedirect()} />} />
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/doctor/dashboard" element={<Dashboard />} />
           <Route path="/patients" element={<Patients />} />
           <Route path="/patients/:id" element={<PatientDetail />} />
           <Route path="/documents" element={<Documents />} />

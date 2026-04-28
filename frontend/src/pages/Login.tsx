@@ -20,18 +20,29 @@ const Login = () => {
     e.preventDefault();
     setIsLoading(true);
     
-    // Simulate delay
-    await new Promise(resolve => setTimeout(resolve, 800));
-    
-    const success = login(email, password);
-    
-    if (success) {
-      toast.success('Successfully logged in');
-      navigate('/dashboard');
-    } else {
-      toast.error('Invalid credentials. Use admin@apexcare.com / admin123');
+    try {
+      const error = await login(email, password);
+      
+      if (error === null) {
+        // null means success
+        toast.success('Successfully logged in');
+        const role = useAuthStore.getState().role;
+        if (role?.toLowerCase() === 'admin') {
+          navigate('/dashboard');
+        } else if (role?.toLowerCase() === 'doctor') {
+          navigate('/doctor/dashboard');
+        } else {
+          navigate('/dashboard');
+        }
+      } else {
+        // error is the message string from the backend
+        toast.error(error);
+      }
+    } catch {
+      toast.error('Connection error. Is the backend running?');
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   return (
@@ -162,36 +173,6 @@ const Login = () => {
               )}
             </Button>
           </form>
-
-          <div className="space-y-4">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-slate-200"></span></div>
-              <div className="relative flex justify-center text-xs uppercase tracking-widest"><span className="bg-slate-50/50 px-3 text-slate-400 font-bold">Quick Verification</span></div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <Button 
-                variant="outline" 
-                className="h-16 rounded-2xl border-slate-200 hover:border-indigo-200 hover:bg-indigo-50/30 flex flex-col items-center justify-center gap-1 transition-all group"
-                onClick={() => {setEmail('admin@apexcare.com'); setPassword('admin123');}}
-              >
-                <Shield className="h-5 w-5 text-slate-400 group-hover:text-indigo-600 transition-colors" />
-                <span className="text-[9px] font-bold uppercase tracking-widest text-slate-500">Administrator</span>
-              </Button>
-              <Button 
-                variant="outline" 
-                className="h-16 rounded-2xl border-slate-200 hover:border-indigo-200 hover:bg-indigo-50/30 flex flex-col items-center justify-center gap-1 transition-all group"
-                onClick={() => {setEmail('sarah.johnson@apexcare.com'); setPassword('password123');}}
-              >
-                <Stethoscope className="h-5 w-5 text-slate-400 group-hover:text-indigo-600 transition-colors" />
-                <span className="text-[9px] font-bold uppercase tracking-widest text-slate-500">Medical Staff</span>
-              </Button>
-            </div>
-          </div>
-
-          <p className="text-center text-[10px] uppercase tracking-[0.2em] font-bold text-slate-400 pt-8 opacity-50">
-            Secure Terminal System v2.4.0
-          </p>
         </motion.div>
       </div>
     </div>

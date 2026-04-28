@@ -4,62 +4,70 @@ import { useHospitalStore } from './hospitalStore';
 
 interface AuthState {
   user: User | null;
+  token: string | null;
   isAuthenticated: boolean;
   role: UserRole | null;
-  login: (email: string, password: string) => boolean;
+  login: (email: string, password: string) => Promise<string | null>;
   logout: () => void;
   setRole: (role: UserRole) => void;
 }
 
+const API_URL = 'http://localhost:8000/api';
+
 export const useAuthStore = create<AuthState>((set) => ({
-  user: null,
-  isAuthenticated: false,
-  role: null,
-  login: (email, password) => {
-    // Admin login
-    if (email === 'admin@apexcare.com' && password === 'admin123') {
-      const admin: User = {
-        id: 'u1',
-        name: 'Admin Apex',
-        email: 'admin@apexcare.com',
-        role: 'Admin',
-        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=80&h=80&fit=crop',
+  user: JSON.parse(localStorage.getItem('user') || 'null'),
+  token: localStorage.getItem('token'),
+  isAuthenticated: !!localStorage.getItem('token'),
+  role: localStorage.getItem('role') as UserRole | null,
+  
+  login: async (email, password) => {
+    try {
+      const response = await fetch(`${API_URL}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (!response.ok) {
+        // Extract the detail message from the FastAPI error response
+        const errData = await response.json().catch(() => ({}));
+        const message = errData?.detail || 'Invalid email or password.';
+        return message;
+      }
+
+      const data = await response.json();
+      
+      const user: User = {
+        id: data.user.id,
+        name: data.user.name,
+        email: data.user.email,
+        role: data.role.charAt(0).toUpperCase() + data.role.slice(1),
+        avatar: `https://i.pravatar.cc/150?u=${data.user.id}`,
       };
-      set({ user: admin, role: 'Admin', isAuthenticated: true });
-      return true;
+
+      localStorage.setItem('token', data.access_token);
+      localStorage.setItem('user', JSON.stringify(user));
+      localStorage.setItem('role', user.role);
+
+      set({ 
+        user, 
+        token: data.access_token, 
+        role: user.role as UserRole, 
+        isAuthenticated: true 
+      });
+      
+      return null; // null means success
+    } catch (error) {
+      console.error('Login error:', error);
+      return 'Network error. Please check your connection.';
     }
-
-    // Doctor login (checking from hospital store)
-    const { doctors } = useHospitalStore.getState();
-    const doctorInRegistry = doctors.find((d: any) => d.email === email && (d.password === password || password === 'password123'));
-
-    if (doctorInRegistry) {
-      const doctor: User = {
-        id: doctorInRegistry.id,
-        name: doctorInRegistry.name,
-        email: doctorInRegistry.email,
-        role: 'Doctor',
-        avatar: `https://i.pravatar.cc/150?u=${doctorInRegistry.id}`,
-      };
-      set({ user: doctor, role: 'Doctor', isAuthenticated: true });
-      return true;
-    }
-
-    if (email.endsWith('@apexcare.com') && password === 'password123') {
-      const doctor: User = {
-        id: 'd' + Math.random(),
-        name: email.split('@')[0].replace('.', ' ').toUpperCase(),
-        email: email,
-        role: 'Doctor',
-        avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=80&h=80&fit=crop',
-      };
-      set({ user: doctor, role: 'Doctor', isAuthenticated: true });
-      return true;
-    }
-
-    return false;
   },
-  logout: () => set({ user: null, role: null, isAuthenticated: false }),
+  logout: () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    localStorage.removeItem('role');
+    set({ user: null, token: null, role: null, isAuthenticated: false });
+  },
   setRole: (role) => set({ role }),
 }));
 
