@@ -33,14 +33,14 @@ class NotesService:
         notes.sort(key=lambda x: x.get("created_at", datetime.min), reverse=True)
         return [self._format_note(note) for note in notes]
 
-    async def delete_note(self, note_id: str, doctor_id: str) -> bool:
+    async def delete_note(self, note_id: str, doctor_id: Optional[str]) -> bool:
         db = get_database()
-        # Only the doctor who created the note or an admin (handled by RBAC) should delete?
-        # For now, just implement deletion.
-        result = await db[self.collection_name].delete_one({
-            "_id": ObjectId(note_id),
-            "doctor_id": ObjectId(doctor_id)
-        })
+        
+        query = {"_id": ObjectId(note_id)}
+        if doctor_id:
+            query["doctor_id"] = ObjectId(doctor_id)
+            
+        result = await db[self.collection_name].delete_one(query)
         return result.deleted_count > 0
 
     def _format_note(self, note: Dict[str, Any]) -> Dict[str, Any]:

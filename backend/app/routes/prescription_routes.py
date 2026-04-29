@@ -13,11 +13,17 @@ async def create_prescription(
 ):
     """Create a new prescription."""
     doctor_id = current_user.get("doctor_id")
+    
+    # If user is an admin without a doctor_id, they must provide one in the request
     if not doctor_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Current user is not associated with a doctor profile"
-        )
+        if data.doctor_id:
+            doctor_id = data.doctor_id
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Current user is not associated with a doctor profile. Please provide a doctor_id."
+            )
+            
     return await prescription_service.create_prescription(data, doctor_id)
 
 @router.get("/", response_model=List[PrescriptionResponse])

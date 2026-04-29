@@ -80,10 +80,16 @@ export default function PrescriptionEditor() {
       return;
     }
 
+    if (!patient.assignedDoctorId) {
+      toast.error('This patient has no assigned doctor. Please assign one first.');
+      return;
+    }
+
     setIsSaving(true);
     try {
       await createPrescription({
         patient_id: id,
+        doctor_id: patient.assignedDoctorId,
         clinical_notes: clinicalNotes,
         medications: validMeds,
         additional_notes: additionalNotes

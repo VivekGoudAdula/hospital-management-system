@@ -219,6 +219,7 @@ const PatientDetail = () => {
       await addNote({
         content: newNote,
         patient_id: id,
+        doctor_id: patient.assignedDoctorId,
         author_name: "Admin User", // For demo, assuming admin
         author_role: "Medical Staff"
       });

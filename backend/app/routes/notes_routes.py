@@ -13,11 +13,17 @@ async def create_note(
 ):
     """Create a new clinical observation."""
     doctor_id = current_user.get("doctor_id")
+    
+    # If user is an admin without a doctor_id, they must provide one in the request
     if not doctor_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Current user is not associated with a doctor profile"
-        )
+        if note_data.doctor_id:
+            doctor_id = note_data.doctor_id
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Current user is not associated with a doctor profile. Please provide a doctor_id."
+            )
+            
     return await notes_service.create_note(note_data, doctor_id)
 
 @router.get("/patient/{patient_id}", response_model=List[NoteResponse])
@@ -43,13 +49,18 @@ async def delete_note(
 ):
     """Delete a specific note."""
     doctor_id = current_user.get("doctor_id")
-    if not doctor_id:
+    is_admin = current_user.get("role") == "admin"
+    
+    # If not admin and no doctor_id, then error
+    if not doctor_id and not is_admin:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Current user is not associated with a doctor profile"
         )
     
-    success = await notes_service.delete_note(note_id, doctor_id)
+    # Admin can delete any note, so we pass None for doctor_id to the service
+    # if it's an admin, or we let the service handle the check.
+    success = await notes_service.delete_note(note_id, doctor_id if not is_admin else None)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

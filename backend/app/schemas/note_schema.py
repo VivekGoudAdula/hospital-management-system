@@ -5,6 +5,7 @@ from typing import Optional
 class NoteBase(BaseModel):
     content: str
     patient_id: str
+    doctor_id: Optional[str] = None
     document_id: Optional[str] = None
     note_type: str = "general"
 

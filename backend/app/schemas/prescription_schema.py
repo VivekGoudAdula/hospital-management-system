@@ -15,6 +15,7 @@ class MedicationItem(BaseModel):
 class PrescriptionCreate(BaseModel):
     """Payload accepted when creating a new prescription."""
     patient_id: str
+    doctor_id: Optional[str] = None
     clinical_notes: str = ""
     medications: List[MedicationItem] = Field(default_factory=list)
     additional_notes: str = ""
