@@ -61,9 +61,7 @@ const Navbar = () => {
       </div>
 
       <div className="flex items-center gap-6">
-        <Button className="hidden md:flex bg-indigo-600 text-white hover:bg-indigo-700 h-11 px-6 rounded-2xl text-xs font-bold uppercase tracking-widest shadow-lg shadow-indigo-100 group transition-all active:scale-95">
-          <span className="mr-2">+</span> Admission
-        </Button>
+
 
         <DropdownMenu>
           <DropdownMenuTrigger className="relative h-12 w-auto flex items-center gap-3 p-1 pr-4 rounded-2xl bg-white border border-slate-100 hover:bg-slate-50 transition-all shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-indigo-600/20">

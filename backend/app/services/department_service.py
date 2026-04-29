@@ -52,16 +52,11 @@ async def create_department(data: DepartmentCreate) -> DepartmentResponse:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid doctor ID format.",
             )
-        doctor = await db.users.find_one({"_id": ObjectId(data.hod_id)})
+        doctor = await db.doctors.find_one({"_id": ObjectId(data.hod_id)})
         if not doctor:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Doctor not found.",
-            )
-        if doctor.get("role") != "doctor":
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Only users with role 'doctor' can be assigned as HOD.",
             )
         hod_id = ObjectId(data.hod_id)
         hod_name = doctor["name"]
@@ -216,17 +211,12 @@ async def assign_hod(department_id: str, data: AssignHODSchema) -> DepartmentRes
 
     db = get_database()
 
-    # Verify doctor exists and has the correct role
-    doctor = await db.users.find_one({"_id": ObjectId(data.doctor_id)})
+    # Verify doctor exists
+    doctor = await db.doctors.find_one({"_id": ObjectId(data.doctor_id)})
     if not doctor:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Doctor not found.",
-        )
-    if doctor.get("role") != "doctor":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only users with role 'doctor' can be assigned as HOD.",
         )
 
     # Persist hod_id (as ObjectId) and hod_name (denormalised string) for fast reads
