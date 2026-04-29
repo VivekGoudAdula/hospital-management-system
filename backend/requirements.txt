@@ -3,7 +3,8 @@ uvicorn
 motor
 pydantic
 pydantic-settings
-passlib[bcrypt]
+passlib
+bcrypt
 python-jose[cryptography]
 python-multipart
 python-dotenv
