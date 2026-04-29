@@ -56,7 +56,7 @@ import { toast } from 'sonner';
 import { useAuthStore } from '@/store';
 import { Department, Doctor } from '@/types';
 
-const API_URL = 'http://localhost:8000/api';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
 const Departments = () => {
   const { token, role } = useAuthStore();

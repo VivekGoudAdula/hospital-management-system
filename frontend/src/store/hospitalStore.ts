@@ -8,7 +8,8 @@ import {
   notes as initialNotes 
 } from '../lib/mockData';
 
-const API_URL = 'http://localhost:8000/api';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+const BASE_URL = import.meta.env.VITE_BASE_URL || 'http://localhost:8000';
 
 interface HospitalState {
   departments: Department[];
@@ -438,7 +439,7 @@ export const useHospitalStore = create<HospitalState>((set, get) => ({
           id: d.id,
           type: d.file_type,
           patientId: d.patient_id,
-          fileUrl: `http://localhost:8000${d.file_url}`,
+          fileUrl: `${BASE_URL}${d.file_url}`,
           fileName: d.file_name,
           notes: d.notes,
           uploadDate: d.created_at,

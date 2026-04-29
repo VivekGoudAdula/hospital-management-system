@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
 from .config.db import connect_to_mongo, close_mongo_connection
+from .config.settings import settings
 from .routes import auth_routes, department_routes, doctor_routes, patient_routes, document_routes, stats_routes, note_routes
 
 app = FastAPI(title="ApexCare Backend")
@@ -15,9 +16,11 @@ if not os.path.exists("uploads"):
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # CORS Setup
+origins = settings.ALLOWED_ORIGINS.split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Adjust this for production
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
