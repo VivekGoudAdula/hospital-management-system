@@ -418,7 +418,6 @@ const Doctors = () => {
                 <div className="p-6 pb-0 relative">
                   <div className="flex items-start justify-between">
                     <Avatar className="h-20 w-20 rounded-3xl border-4 border-slate-50 shadow-md bg-slate-50 transition-all group-hover:shadow-indigo-100 group-hover:scale-105 duration-500">
-                      <AvatarImage src={`https://images.unsplash.com/photo-${1580281116636 + index}?w=160&h=160&fit=crop`} className="object-cover" />
                       <AvatarFallback className="rounded-3xl bg-indigo-50 text-indigo-600 font-bold text-xl">
                         {doctor.name.split(' ').map(n => n[0]).join('')}
                       </AvatarFallback>
@@ -515,7 +514,6 @@ const Doctors = () => {
              <div className="flex items-center gap-8">
                 <div className="relative group">
                   <Avatar className="h-24 w-24 rounded-[2rem] border-4 border-white shadow-xl bg-white transform -rotate-3 transition-transform group-hover:rotate-0 duration-500">
-                    <AvatarImage src={`https://images.unsplash.com/photo-1580281116636?w=160&h=160&fit=crop`} />
                     <AvatarFallback className="rounded-[2rem] bg-indigo-50 text-indigo-600 font-bold text-2xl uppercase">
                       {viewingDoctor?.name.split(' ').map((n: string) => n[0]).join('')}
                     </AvatarFallback>

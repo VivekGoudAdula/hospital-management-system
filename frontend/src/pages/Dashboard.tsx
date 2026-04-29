@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { 
   Users, 
@@ -38,8 +38,14 @@ import { useNavigate } from 'react-router-dom';
 
 const Dashboard = () => {
   const { role, user } = useAuthStore();
-  const { patients, doctors, departments, documents } = useHospitalStore();
+  const { patients, doctors, departments, documents, stats, fetchStats, fetchPatients, fetchAllDocuments } = useHospitalStore();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    fetchStats();
+    fetchPatients();
+    fetchAllDocuments();
+  }, []);
 
   const container = {
     hidden: { opacity: 0 },
@@ -75,10 +81,10 @@ const Dashboard = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
           {[
-            { label: 'Total Patients', value: '12,845', trend: '+12.5%', color: 'text-emerald-600', trendBg: 'bg-emerald-50', icon: Users },
-            { label: 'Doctors Active', value: '158', trend: 'Stable', color: 'text-indigo-600', trendBg: 'bg-indigo-50', icon: UserRound },
-            { label: 'Total Services', value: '12', trend: 'Active', color: 'text-blue-600', trendBg: 'bg-blue-50', icon: Building2 },
-            { label: 'Cloud Records', value: '4,219', trend: '+4.2%', color: 'text-emerald-600', trendBg: 'bg-emerald-50', icon: Files },
+            { label: 'Total Patients', value: stats?.total_patients.toLocaleString() || '0', trend: stats?.trends.patients || '+0%', color: 'text-emerald-600', trendBg: 'bg-emerald-50', icon: Users },
+            { label: 'Doctors Active', value: stats?.total_doctors.toLocaleString() || '0', trend: stats?.trends.doctors || 'Stable', color: 'text-indigo-600', trendBg: 'bg-indigo-50', icon: UserRound },
+            { label: 'Total Services', value: stats?.total_departments.toLocaleString() || '0', trend: stats?.trends.services || 'Active', color: 'text-blue-600', trendBg: 'bg-blue-50', icon: Building2 },
+            { label: 'Cloud Records', value: stats?.total_documents.toLocaleString() || '0', trend: stats?.trends.records || '+0%', color: 'text-emerald-600', trendBg: 'bg-emerald-50', icon: Files },
           ].map((stat, i) => (
             <motion.div key={i} variants={item}>
               <div className="premium-card p-6 relative group overflow-hidden">
@@ -152,10 +158,10 @@ const Dashboard = () => {
               </div>
               <div className="p-8 space-y-8 flex-1 overflow-y-auto">
                 {[
-                  { name: 'ICU Ward Critical', used: 18, total: 24, color: 'bg-rose-500', pct: '75%', trend: 'High' },
-                  { name: 'Emergency Triage', used: 25, total: 30, color: 'bg-amber-500', pct: '84%', trend: 'Extreme' },
-                  { name: 'Medical Oncology', used: 120, total: 150, color: 'bg-indigo-600', pct: '80%', trend: 'Normal' },
-                  { name: 'Surgery Suite B', used: 4, total: 6, color: 'bg-emerald-500', pct: '66%', trend: 'Low' },
+                  { name: 'Admitted Now', used: stats?.admitted_now || 0, total: stats?.total_patients || 0, color: 'bg-rose-500', pct: `${((stats?.admitted_now || 0) / (stats?.total_patients || 1) * 100).toFixed(0)}%`, trend: 'Active' },
+                  { name: 'Out-Patient', used: stats?.out_patient || 0, total: stats?.total_patients || 0, color: 'bg-emerald-500', pct: `${((stats?.out_patient || 0) / (stats?.total_patients || 1) * 100).toFixed(0)}%`, trend: 'Stable' },
+                  { name: 'Critical Care', used: stats?.critical_care || 0, total: stats?.total_patients || 0, color: 'bg-rose-600', pct: `${((stats?.critical_care || 0) / (stats?.total_patients || 1) * 100).toFixed(0)}%`, trend: 'Urgent' },
+                  { name: 'Discharged', used: stats?.discharged || 0, total: stats?.total_patients || 0, color: 'bg-indigo-600', pct: `${((stats?.discharged || 0) / (stats?.total_patients || 1) * 100).toFixed(0)}%`, trend: 'Normal' },
                 ].map((ward) => (
                   <div key={ward.name} className="space-y-3">
                     <div className="flex justify-between items-end">
@@ -214,16 +220,12 @@ const Dashboard = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50 text-sm font-medium">
-                  {[
-                    { name: 'James Sullivan', initials: 'JS', color: 'bg-indigo-50 text-indigo-600', mrn: '#PC-102938', dept: 'Cardiology', status: 'In Evaluation', statusColor: 'bg-amber-50 text-amber-600 border-amber-100', time: '09:45 AM Today' },
-                    { name: 'Martha Wright', initials: 'MW', color: 'bg-emerald-50 text-emerald-600', mrn: '#PC-110294', dept: 'Ophthalmology', status: 'Stable Discharge', statusColor: 'bg-emerald-50 text-emerald-600 border-emerald-100', time: '11:20 AM Today' },
-                    { name: 'Robert Davis', initials: 'RD', color: 'bg-rose-50 text-rose-600', mrn: '#PC-118273', dept: 'Neurology Unit A', status: 'Critical Audit', statusColor: 'bg-rose-50 text-rose-600 border-rose-100', time: 'Yesterday, 04:30 PM' },
-                  ].map((row, i) => (
-                    <tr key={i} className="hover:bg-slate-50/50 transition-all group cursor-pointer" onClick={() => navigate(`/patients/${row.mrn}`)}>
+                  {patients.slice(0, 3).map((row, i) => (
+                    <tr key={row.id} className="hover:bg-slate-50/50 transition-all group cursor-pointer" onClick={() => navigate(`/patients/${row.id}`)}>
                       <td className="px-8 py-6">
                         <div className="flex items-center gap-4">
-                          <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center font-bold text-[11px] border shadow-sm transition-all group-hover:scale-105", row.color, row.color.replace('bg-', 'border-'))}>
-                            {row.initials}
+                          <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center font-bold text-[11px] border shadow-sm transition-all group-hover:scale-105 bg-indigo-50 text-indigo-600 border-indigo-100")}>
+                            {row.name.split(' ').map(n => n[0]).join('')}
                           </div>
                           <span className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors tracking-tight">{row.name}</span>
                         </div>
@@ -231,15 +233,17 @@ const Dashboard = () => {
                       <td className="px-8 py-6 font-mono text-xs font-bold text-slate-400 tracking-tighter">{row.mrn}</td>
                       <td className="px-8 py-6">
                          <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-100 text-slate-600 text-[10px] font-bold uppercase rounded-lg border border-slate-200/50 leading-none">
-                           <Building2 className="h-3 w-3 opacity-50" /> {row.dept}
+                           <Building2 className="h-3 w-3 opacity-50" /> General Ward
                          </span>
                       </td>
                       <td className="px-8 py-6 text-center">
-                        <Badge variant="outline" className={cn("text-[9px] font-bold uppercase rounded-full px-3 py-1 border-none shadow-sm", row.statusColor)}>
+                        <Badge variant="outline" className={cn("text-[9px] font-bold uppercase rounded-full px-3 py-1 border-none shadow-sm", 
+                          row.status === 'Critical' ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                        )}>
                           {row.status}
                         </Badge>
                       </td>
-                      <td className="px-8 py-6 text-right text-slate-400 font-bold text-[10px] uppercase tracking-wider">{row.time}</td>
+                      <td className="px-8 py-6 text-right text-slate-400 font-bold text-[10px] uppercase tracking-wider">Today</td>
                     </tr>
                   ))}
                 </tbody>
@@ -441,13 +445,12 @@ const Dashboard = () => {
              </div>
              <div className="p-4 space-y-5">
                 {[
-                  { name: 'Dr. Evans', avatar: 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=80&h=80&fit=crop', time: '2m ago', text: 'Oncology ward rounds finished. Chart updates incoming.', color: 'bg-indigo-50 text-indigo-600' },
-                  { name: 'Nrs. Clara', avatar: 'https://images.unsplash.com/photo-1594824476967-48c8b964273f?w=80&h=80&fit=crop', time: '1h ago', text: 'MRI slot available for #PC-1029. Ready for transport?', color: 'bg-emerald-50 text-emerald-600' },
+                  { name: 'Dr. Evans', time: '2m ago', text: 'Oncology ward rounds finished. Chart updates incoming.', color: 'bg-indigo-50 text-indigo-600' },
+                  { name: 'Nrs. Clara', time: '1h ago', text: 'MRI slot available for #PC-1029. Ready for transport?', color: 'bg-emerald-50 text-emerald-600' },
                 ].map((note, i) => (
                   <div key={i} className="flex gap-4 group">
                     <Avatar className="h-10 w-10 rounded-2xl border-2 border-white shadow-sm ring-1 ring-slate-100 transform transition-transform group-hover:scale-105">
-                      <AvatarImage src={note.avatar} className="object-cover" />
-                      <AvatarFallback className="text-[11px] font-bold bg-slate-100 text-slate-600">{note.name[0]}</AvatarFallback>
+                      <AvatarFallback className="text-[11px] font-bold bg-slate-100 text-slate-600">{note.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
                     </Avatar>
                     <div className="flex-1 space-y-1.5">
                        <div className="flex items-center justify-between font-sans">

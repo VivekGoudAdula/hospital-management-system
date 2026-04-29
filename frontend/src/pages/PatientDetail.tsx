@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -15,6 +15,9 @@ import {
   Plus,
   MoreHorizontal,
   ChevronRight,
+  ChevronLeft,
+  Files,
+  ShieldCheck,
   Eye,
   Download,
   Share2,
@@ -26,7 +29,8 @@ import {
   Search,
   Tag as TagIcon,
   Filter,
-  Users
+  Users,
+  Trash2
 } from 'lucide-react';
 import { 
   Card, 
@@ -49,23 +53,145 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { patients, documents, notes, doctors } from '@/lib/mockData';
+import { useHospitalStore } from '@/store/hospitalStore';
+import { notes } from '@/lib/mockData';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogDescription, 
+  DialogHeader, 
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter
+} from '@/components/ui/dialog';
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from '@/components/ui/select';
 import { toast } from 'sonner';
 
 const PatientDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { 
+    fetchPatientById, 
+    fetchPatientDocuments, 
+    documents, 
+    updatePatientStatus, 
+    uploadDocument, 
+    deleteDocument, 
+    doctors, 
+    fetchDoctors,
+    notes,
+    addNote,
+    fetchNotesByPatient
+  } = useHospitalStore();
+  
+  const [patient, setPatient] = useState<any>(null);
+  const [vitals, setVitals] = useState<any[]>([]); // Initialize empty as requested
+  const [prescriptions, setPrescriptions] = useState<any[]>([]); // Initialize empty as requested
+  const [isNoteDialogOpen, setIsNoteDialogOpen] = useState(false);
+  const [newNote, setNewNote] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
   const [selectedDoc, setSelectedDoc] = useState<any>(null);
   const [activeTab, setActiveTab] = useState('clinical');
   const [searchTerm, setSearchTerm] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+  const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
+  const [uploadData, setUploadData] = useState({
+    file_type: 'MRI',
+    notes: ''
+  });
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
-  const patient = patients.find(p => p.id === id);
+  useEffect(() => {
+    const loadData = async () => {
+      if (!id) return;
+      setIsLoading(true);
+      try {
+        const p = await fetchPatientById(id);
+        setPatient(p);
+        await fetchPatientDocuments(id);
+        await fetchDoctors();
+        await fetchNotesByPatient(id);
+      } catch (error) {
+        console.error('Failed to load patient data:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadData();
+  }, [id]);
+
   const assignedDoctor = doctors.find(d => d.id === patient?.assignedDoctorId);
-  const patientDocs = documents.filter(d => d.patientId === id);
+
+  const handleStatusUpdate = async (newStatus: string) => {
+    if (!id) return;
+    try {
+      await updatePatientStatus(id, newStatus);
+      setPatient({ ...patient, status: newStatus.charAt(0).toUpperCase() + newStatus.slice(1) });
+      toast.success(`Patient status updated to ${newStatus}`);
+    } catch (error) {
+      toast.error('Failed to update status');
+    }
+  };
+
+  const handleFileUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedFile || !id) return;
+
+    setIsUploading(true);
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+    formData.append('patient_id', id);
+    formData.append('file_type', uploadData.file_type);
+    formData.append('notes', uploadData.notes);
+
+    try {
+      await uploadDocument(formData);
+      toast.success('Document uploaded successfully');
+      setIsUploadDialogOpen(false);
+      setSelectedFile(null);
+      setUploadData({ file_type: 'MRI', notes: '' });
+    } catch (error: any) {
+      toast.error(error.message || 'Upload failed');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleAddNote = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newNote.trim() || !id) return;
+
+    try {
+      await addNote({
+        content: newNote,
+        patient_id: id,
+        author_name: "Admin User", // For demo, assuming admin
+        author_role: "Medical Staff"
+      });
+      setNewNote('');
+      setIsNoteDialogOpen(false);
+      toast.success('Clinical observation appended to chart');
+    } catch (error) {
+      toast.error('Failed to add note');
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-32">
+        <div className="h-12 w-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   if (!patient) {
     return (
@@ -82,10 +208,11 @@ const PatientDetail = () => {
     );
   }
 
-  // Filter docs for search in Documents tab
-  const filteredDocs = patientDocs.filter(doc => 
+  const patientDocs = documents;
+  const uploaderDoc = doctors.find(d => d.id === selectedDoc?.uploadedBy);
+  const filteredDocs = documents.filter(doc => 
     doc.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    doc.applicationId.toLowerCase().includes(searchTerm.toLowerCase())
+    (doc.fileName && doc.fileName.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   return (
@@ -103,7 +230,17 @@ const PatientDetail = () => {
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-bold text-slate-900 leading-none">{patient.name}</h1>
-              <Badge className="bg-emerald-50 text-emerald-700 border-emerald-100 rounded text-[10px] font-bold uppercase tracking-widest leading-none h-5">Patient Active</Badge>
+              <Select value={patient.status.toLowerCase()} onValueChange={handleStatusUpdate}>
+                <SelectTrigger className="h-6 w-fit bg-emerald-50 text-emerald-700 border-emerald-100 rounded text-[10px] font-bold uppercase tracking-widest leading-none px-2 focus:ring-0">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl border-slate-100 shadow-xl p-1">
+                  <SelectItem value="active" className="rounded-lg text-[10px] font-bold uppercase">Active</SelectItem>
+                  <SelectItem value="admitted" className="rounded-lg text-[10px] font-bold uppercase">Admitted</SelectItem>
+                  <SelectItem value="discharged" className="rounded-lg text-[10px] font-bold uppercase">Discharged</SelectItem>
+                  <SelectItem value="follow-up" className="rounded-lg text-[10px] font-bold uppercase">Follow-up</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="flex items-center gap-3 mt-1.5">
               <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-mono font-bold border border-slate-200">{patient.mrn}</span>
@@ -135,7 +272,6 @@ const PatientDetail = () => {
             <div className="px-6 pb-8 -mt-10">
               <div className="relative inline-block mb-4">
                 <Avatar className="h-20 w-20 rounded-xl border-4 border-white shadow-md bg-white">
-                  <AvatarImage src={`https://i.pravatar.cc/150?u=${patient.id}`} />
                   <AvatarFallback className="text-xl font-bold text-indigo-600 bg-indigo-50 border border-indigo-100">{patient.name.split(' ').map(n=>n[0]).join('')}</AvatarFallback>
                 </Avatar>
                 <div className="absolute -bottom-1 -right-1 h-6 w-6 bg-emerald-500 border-2 border-white rounded-full flex items-center justify-center shadow-sm">
@@ -176,7 +312,7 @@ const PatientDetail = () => {
                     </div>
                     <div>
                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1">Residency</p>
-                       <p className="text-xs font-bold text-slate-700">Brooklyn, NY 11201</p>
+                       <p className="text-xs font-bold text-slate-700">{patient.address || 'Brooklyn, NY 11201'}</p>
                     </div>
                   </div>
                 </div>
@@ -194,7 +330,7 @@ const PatientDetail = () => {
                       <Shield className="h-3 w-3 text-slate-400" />
                       <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">Insurer</p>
                     </div>
-                    <p className="text-[11px] font-bold text-slate-700 truncate">Aetna Blue</p>
+                    <p className="text-[11px] font-bold text-slate-700 truncate">{patient.insuranceInfo || 'Aetna Blue'}</p>
                   </div>
                 </div>
               </div>
@@ -209,8 +345,7 @@ const PatientDetail = () => {
             <CardContent className="p-4 space-y-4">
               <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer group">
                 <Avatar className="h-9 w-9 rounded-md border border-slate-100 shadow-sm">
-                  <AvatarImage src={`https://i.pravatar.cc/150?u=${assignedDoctor?.id || 'doc'}`} />
-                  <AvatarFallback className="text-xs font-bold bg-indigo-50 text-indigo-600">SJ</AvatarFallback>
+                  <AvatarFallback className="text-xs font-bold bg-indigo-50 text-indigo-600">{assignedDoctor?.name?.split(' ').map(n => n[0]).join('') || 'DR'}</AvatarFallback>
                 </Avatar>
                 <div>
                   <p className="text-sm font-bold text-slate-900 leading-none group-hover:text-indigo-600 transition-colors">{assignedDoctor?.name}</p>
@@ -239,7 +374,36 @@ const PatientDetail = () => {
                       <CardTitle className="text-base font-bold text-slate-900 flex items-center gap-2"><ClipboardList className="h-4 w-4 text-indigo-500" /> Care Observations</CardTitle>
                       <CardDescription className="text-xs text-slate-400">Collaboration logs and patient notes</CardDescription>
                     </div>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md"><Plus className="h-4 w-4" /></Button>
+                    <Dialog open={isNoteDialogOpen} onOpenChange={setIsNoteDialogOpen}>
+                      <DialogTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md"><Plus className="h-4 w-4" /></Button>
+                      </DialogTrigger>
+                      <DialogContent className="sm:max-w-md rounded-[2.5rem] p-0 border-none shadow-2xl overflow-hidden">
+                        <DialogHeader className="p-8 bg-indigo-600 text-white">
+                          <DialogTitle className="text-xl font-bold">New Clinical Observation</DialogTitle>
+                          <DialogDescription className="text-indigo-100 text-xs font-medium">
+                            Append a clinical note or collaboration log to this patient's master record.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <form onSubmit={handleAddNote} className="p-8 space-y-6 bg-white">
+                           <div className="space-y-4">
+                              <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Clinical Assessment</Label>
+                              <textarea 
+                                className="w-full h-32 p-4 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all font-medium text-sm resize-none outline-none border focus:border-indigo-100"
+                                placeholder="Enter clinical notes, observation details or diagnostic summary..."
+                                value={newNote}
+                                onChange={(e) => setNewNote(e.target.value)}
+                              />
+                           </div>
+                           <DialogFooter className="sm:justify-between flex items-center pt-2">
+                              <Button type="button" variant="ghost" className="rounded-2xl h-12 text-slate-400 font-bold uppercase tracking-widest text-[10px]" onClick={() => setIsNoteDialogOpen(false)}>Abort</Button>
+                              <Button type="submit" className="rounded-2xl h-12 px-8 bg-indigo-600 text-white font-bold text-xs uppercase tracking-widest shadow-xl shadow-indigo-100" disabled={!newNote.trim()}>
+                                 Finalize Note
+                              </Button>
+                           </DialogFooter>
+                        </form>
+                      </DialogContent>
+                    </Dialog>
                   </CardHeader>
                   <CardContent className="p-0">
                     <div className="divide-y divide-slate-50">
@@ -281,22 +445,23 @@ const PatientDetail = () => {
                     <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400"><Search className="h-3.5 w-3.5" /></Button>
                   </CardHeader>
                   <CardContent className="p-5 space-y-3">
-                    {[
-                      { label: 'Blood Pressure', value: '118/76', unit: 'mmHg', status: 'Stable', color: 'text-emerald-500', bg: 'bg-emerald-50 border-emerald-100' },
-                      { label: 'Heart Rate', value: '68', unit: 'BPM', status: 'Healthy', color: 'text-emerald-500', bg: 'bg-emerald-50 border-emerald-100' },
-                      { label: 'Core Temp.', value: '98.2', unit: '°F', status: 'Post-op', color: 'text-blue-500', bg: 'bg-blue-50 border-blue-100' },
-                      { label: 'SpO2 Level', value: '99', unit: '%', status: 'Optimal', color: 'text-indigo-500', bg: 'bg-indigo-50 border-indigo-100' },
-                    ].map((v, i) => (
-                      <div key={i} className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-100 shadow-sm group hover:ring-1 hover:ring-slate-200 transition-all">
-                        <div>
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1.5">{v.label}</p>
-                          <p className="text-xl font-bold text-slate-900 tracking-tight leading-none">{v.value} <span className="text-xs font-medium text-slate-300 ml-0.5">{v.unit}</span></p>
+                    {vitals.length > 0 ? (
+                      vitals.map((v, i) => (
+                        <div key={i} className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-100 shadow-sm group hover:ring-1 hover:ring-slate-200 transition-all">
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1.5">{v.label}</p>
+                            <p className="text-xl font-bold text-slate-900 tracking-tight leading-none">{v.value} <span className="text-xs font-medium text-slate-300 ml-0.5">{v.unit}</span></p>
+                          </div>
+                          <Badge variant="outline" className={cn("text-[9px] font-bold uppercase rounded h-5 border px-2", v.color, v.bg)}>
+                            {v.status}
+                          </Badge>
                         </div>
-                        <Badge variant="outline" className={cn("text-[9px] font-bold uppercase rounded h-5 border px-2", v.color, v.bg)}>
-                          {v.status}
-                        </Badge>
+                      ))
+                    ) : (
+                      <div className="py-10 text-center bg-slate-50/30 rounded-xl border border-dashed border-slate-100">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">No recent snapshots</p>
                       </div>
-                    ))}
+                    )}
                     <Button variant="ghost" className="w-full text-[10px] font-bold text-indigo-600 uppercase tracking-widest pt-2">View Trends Timeline</Button>
                   </CardContent>
                 </Card>
@@ -321,28 +486,33 @@ const PatientDetail = () => {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {[
-                          { name: 'Lisinopril-20', company: 'Pfizer Pharm', dosage: '20mg / Tablet', frequency: 'Daily • 1-0-0', status: 'Active', expiry: 'Oct 12, 2024' },
-                          { name: 'Atorvastatin-S', company: 'Zydus Med', dosage: '10mg / Tablet', frequency: 'Daily • 0-0-1', status: 'Refillable', expiry: 'Dec 05, 2024' },
-                        ].map((m, i) => (
-                          <TableRow key={i} className="border-slate-50 hover:bg-slate-50/50 transition-colors group">
-                            <TableCell className="py-4 pl-6">
-                               <div>
-                                  <p className="font-bold text-sm text-slate-900">{m.name}</p>
-                                  <p className="text-[10px] text-slate-400 font-medium">{m.company}</p>
-                               </div>
-                            </TableCell>
-                            <TableCell className="text-xs text-slate-600 font-bold py-4">{m.dosage}</TableCell>
-                            <TableCell className="text-xs text-slate-500 font-medium py-4">{m.frequency}</TableCell>
-                            <TableCell className="text-xs text-slate-400 font-medium py-4">{m.expiry}</TableCell>
-                            <TableCell className="text-center py-4">
-                               <Badge className="bg-indigo-50 text-indigo-600 border-indigo-100 text-[9px] font-bold uppercase rounded h-5">{m.status}</Badge>
-                            </TableCell>
-                            <TableCell className="text-right pr-6 py-4">
-                               <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-300 hover:text-slate-900"><MoreHorizontal className="h-4 w-4" /></Button>
+                        {prescriptions.length > 0 ? (
+                          prescriptions.map((m, i) => (
+                            <TableRow key={i} className="border-slate-50 hover:bg-slate-50/50 transition-colors group">
+                              <TableCell className="py-4 pl-6">
+                                 <div>
+                                    <p className="font-bold text-sm text-slate-900">{m.name}</p>
+                                    <p className="text-[10px] text-slate-400 font-medium">{m.company}</p>
+                                 </div>
+                              </TableCell>
+                              <TableCell className="text-xs text-slate-600 font-bold py-4">{m.dosage}</TableCell>
+                              <TableCell className="text-xs text-slate-500 font-medium py-4">{m.frequency}</TableCell>
+                              <TableCell className="text-xs text-slate-400 font-medium py-4">{m.expiry}</TableCell>
+                              <TableCell className="text-center py-4">
+                                 <Badge className="bg-indigo-50 text-indigo-600 border-indigo-100 text-[9px] font-bold uppercase rounded h-5">{m.status}</Badge>
+                              </TableCell>
+                              <TableCell className="text-right pr-6 py-4">
+                                 <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-300 hover:text-slate-900"><MoreHorizontal className="h-4 w-4" /></Button>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        ) : (
+                          <TableRow>
+                            <TableCell colSpan={6} className="py-12 text-center">
+                               <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">No Active Prescriptions On File</p>
                             </TableCell>
                           </TableRow>
-                        ))}
+                        )}
                       </TableBody>
                     </Table>
                   </div>
@@ -366,46 +536,120 @@ const PatientDetail = () => {
                      <Button variant="outline" className="flex-1 sm:flex-none h-10 rounded-md border-slate-200 text-slate-600 font-bold gap-2 text-xs">
                         <Filter className="h-3.5 w-3.5" /> Categorize
                      </Button>
-                     <Button className="flex-1 sm:flex-none h-10 rounded-md bg-white border border-indigo-200 text-indigo-600 hover:bg-indigo-50 font-bold gap-2 text-xs shadow-sm" onClick={() => toast.info('Initiating multi-upload protocol...')}>
-                        <Upload className="h-3.5 w-3.5" /> Batch Upload
-                     </Button>
+                     <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
+                        <DialogTrigger asChild>
+                          <Button className="flex-1 sm:flex-none h-10 rounded-md bg-white border border-indigo-200 text-indigo-600 hover:bg-indigo-50 font-bold gap-2 text-xs shadow-sm">
+                              <Plus className="h-3.5 w-3.5" /> Upload Document
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-md rounded-[2.5rem] p-0 border-none shadow-2xl">
+                          <DialogHeader className="p-10 bg-gradient-to-br from-indigo-600 to-indigo-700 text-white relative overflow-hidden">
+                             <div className="absolute top-0 right-0 p-8 opacity-10 blur-xl">
+                                <Upload className="h-40 w-40" />
+                             </div>
+                             <DialogTitle className="text-2xl font-bold tracking-tight">Import Record</DialogTitle>
+                             <DialogDescription className="text-indigo-100 font-medium text-sm">
+                                Append diagnostic reports or imaging to patient chart.
+                             </DialogDescription>
+                          </DialogHeader>
+                          <form onSubmit={handleFileUpload} className="p-10 space-y-6 bg-white">
+                            <div className="space-y-4">
+                              <div className="grid gap-2">
+                                <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Document Category</Label>
+                                <Select value={uploadData.file_type} onValueChange={(v) => setUploadData({ ...uploadData, file_type: v })}>
+                                  <SelectTrigger className="h-12 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all font-medium">
+                                    <SelectValue placeholder="Select Type" />
+                                  </SelectTrigger>
+                                  <SelectContent className="rounded-2xl border-slate-100 shadow-xl p-2">
+                                    {['MRI', 'X-Ray', 'CT Scan', 'Blood Test', 'Prescription', 'Other'].map(t => (
+                                      <SelectItem key={t} value={t} className="rounded-xl">{t}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="grid gap-2">
+                                <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Clinical Notes</Label>
+                                <Input 
+                                  placeholder="Initial scan observations..." 
+                                  className="h-12 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all font-medium"
+                                  value={uploadData.notes}
+                                  onChange={(e) => setUploadData({ ...uploadData, notes: e.target.value })}
+                                />
+                              </div>
+                              <div className="grid gap-2">
+                                <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">File Asset</Label>
+                                <div className="relative">
+                                  <Input 
+                                    type="file" 
+                                    className="hidden" 
+                                    id="file-upload" 
+                                    onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                                    accept=".pdf,.jpg,.jpeg,.png"
+                                  />
+                                  <label 
+                                    htmlFor="file-upload" 
+                                    className="flex items-center justify-center w-full h-24 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer group"
+                                  >
+                                    <div className="text-center">
+                                      <Upload className="h-5 w-5 text-slate-400 mx-auto mb-1 group-hover:text-indigo-600 group-hover:scale-110 transition-all" />
+                                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                                        {selectedFile ? selectedFile.name : 'Select PDF or Image'}
+                                      </span>
+                                    </div>
+                                  </label>
+                                </div>
+                              </div>
+                            </div>
+                            <DialogFooter className="pt-4 sm:justify-between flex items-center">
+                              <Button type="button" variant="ghost" className="rounded-2xl h-12 text-slate-400 font-bold uppercase tracking-widest text-[10px]" onClick={() => setIsUploadDialogOpen(false)}>Abort</Button>
+                              <Button type="submit" className="rounded-2xl h-12 px-8 bg-indigo-600 text-white font-bold text-xs uppercase tracking-widest shadow-xl shadow-indigo-100" disabled={isUploading || !selectedFile}>
+                                {isUploading ? 'Uploading...' : 'Finalize Sync'}
+                              </Button>
+                            </DialogFooter>
+                          </form>
+                        </DialogContent>
+                     </Dialog>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                    {filteredDocs.map((doc, i) => (
                      <Card key={doc.id} className="group border border-slate-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all hover:-translate-y-1 cursor-pointer bg-white" onClick={() => setSelectedDoc(doc)}>
-                       <div className="aspect-[4/3] relative overflow-hidden bg-slate-50 border-b border-slate-100">
-                         <img src={doc.thumbnail} alt={doc.type} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
-                         <div className="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/20 transition-colors" />
-                         <Badge className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm text-slate-800 border-none text-[9px] font-bold uppercase shadow-sm tracking-tight h-5">
-                            {doc.applicationId}
-                         </Badge>
-                         <Button variant="secondary" className="absolute inset-0 m-auto h-10 w-10 rounded-full bg-white opacity-0 group-hover:opacity-100 scale-75 group-hover:scale-100 transition-all shadow-xl flex items-center justify-center p-0">
-                            <Eye className="h-5 w-5 text-indigo-600" />
-                         </Button>
-                       </div>
-                       <CardHeader className="p-4 space-y-1.5 flex-1">
-                          <div className="flex items-center justify-between">
-                            <CardTitle className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors leading-none">{doc.type}</CardTitle>
-                            <Badge variant="ghost" className="text-[10px] text-slate-400 p-0 font-bold uppercase tracking-widest h-auto leading-none">{doc.uploadDate}</Badge>
-                          </div>
-                          <div className="flex items-center gap-2">
-                             <TagIcon className="h-3 w-3 text-slate-300" />
-                             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">Radiology • Verified</p>
-                          </div>
-                       </CardHeader>
-                       <CardFooter className="px-4 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{doc.filesCount || 1} Attachments</span>
-                          <div className="flex gap-1 opacity-40 group-hover:opacity-100 transition-opacity">
-                             <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-500 hover:text-indigo-600 hover:bg-white rounded" onClick={(e) => {e.stopPropagation(); toast.success('Link copied');}}><Share2 className="h-3.5 w-3.5" /></Button>
-                             <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-500 hover:text-slate-900 hover:bg-white rounded"><Download className="h-3.5 w-3.5" /></Button>
-                          </div>
-                       </CardFooter>
+                        <div className="aspect-[4/3] relative overflow-hidden bg-slate-50 border-b border-slate-100 flex items-center justify-center">
+                            {doc.fileUrl.match(/\.(jpg|jpeg|png|gif)$/i) ? (
+                              <img src={doc.fileUrl} alt={doc.type} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                            ) : (
+                              <FileText className="h-16 w-16 text-indigo-100 group-hover:scale-110 transition-transform duration-700" />
+                            )}
+                            <div className="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/20 transition-colors" />
+                            <Badge className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm text-slate-800 border-none text-[9px] font-bold uppercase shadow-sm tracking-tight h-5">
+                                DOC-{doc.id.slice(-4).toUpperCase()}
+                            </Badge>
+                            <Button variant="secondary" className="absolute inset-0 m-auto h-10 w-10 rounded-full bg-white opacity-0 group-hover:opacity-100 scale-75 group-hover:scale-100 transition-all shadow-xl flex items-center justify-center p-0">
+                                <Eye className="h-5 w-5 text-indigo-600" />
+                            </Button>
+                         </div>
+                         <CardHeader className="p-4 space-y-1.5 flex-1">
+                            <div className="flex items-center justify-between">
+                              <CardTitle className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors leading-none">{doc.type}</CardTitle>
+                              <Badge variant="ghost" className="text-[10px] text-slate-400 p-0 font-bold uppercase tracking-widest h-auto leading-none">{new Date(doc.uploadDate).toLocaleDateString()}</Badge>
+                            </div>
+                            <div className="flex items-center gap-2">
+                               <TagIcon className="h-3 w-3 text-slate-300" />
+                               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter truncate max-w-[200px]">{doc.fileName}</p>
+                            </div>
+                         </CardHeader>
+                         <CardFooter className="px-4 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Verified Record</span>
+                            <div className="flex gap-1 opacity-40 group-hover:opacity-100 transition-opacity">
+                               <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-500 hover:text-indigo-600 hover:bg-white rounded" onClick={(e) => {e.stopPropagation(); window.open(doc.fileUrl);}}><Download className="h-3.5 w-3.5" /></Button>
+                               <Button variant="ghost" size="icon" className="h-7 w-7 text-rose-400 hover:text-rose-600 hover:bg-white rounded" onClick={(e) => {e.stopPropagation(); deleteDocument(doc.id);}}><Trash2 className="h-3.5 w-3.5" /></Button>
+                            </div>
+                         </CardFooter>
                      </Card>
                    ))}
                    
-                   <Card className="border-2 border-dashed border-slate-200 rounded-xl bg-slate-50/50 hover:bg-slate-50 hover:border-slate-300 transition-all cursor-pointer flex flex-col items-center justify-center py-12 px-6 group" onClick={() => toast.info('File Picker Protocol Initiated')}>
+                   <Card className="border-2 border-dashed border-slate-200 rounded-xl bg-slate-50/50 hover:bg-slate-50 hover:border-slate-300 transition-all cursor-pointer flex flex-col items-center justify-center py-12 px-6 group" onClick={() => setIsUploadDialogOpen(true)}>
                       <div className="h-12 w-12 rounded-full bg-white flex items-center justify-center shadow-sm mb-4 border border-slate-100 group-hover:scale-110 transition-transform">
                         <Upload className="h-6 w-6 text-slate-400 group-hover:text-indigo-600" />
                       </div>
@@ -436,102 +680,175 @@ const PatientDetail = () => {
         </div>
       </div>
 
-      {/* Document Detail Viewer */}
+      {/* Document Detail Viewer - Redesigned to match reference */}
       <Dialog open={!!selectedDoc} onOpenChange={() => setSelectedDoc(null)}>
-        <DialogContent className="sm:max-w-3xl rounded-[2.5rem] p-0 border-none shadow-2xl flex flex-col overflow-hidden bg-white">
-          <DialogHeader className="p-10 bg-slate-50 border-b border-slate-100 shrink-0">
-            <div className="flex items-center gap-4 mb-4">
-               <Badge className="bg-indigo-600 text-white rounded-xl px-4 py-1.5 font-mono border-none text-[10px] font-bold tracking-widest shadow-lg shadow-indigo-100">{selectedDoc?.applicationId}</Badge>
-               <Badge variant="outline" className="rounded-xl px-4 py-1.5 text-[10px] border-slate-200 text-slate-500 font-bold uppercase tracking-widest">{selectedDoc?.type}</Badge>
-            </div>
-            <DialogTitle className="text-3xl font-bold text-slate-900 tracking-tight leading-none">{selectedDoc?.patientName || patient.name}</DialogTitle>
-            <DialogDescription className="text-sm text-slate-400 font-medium mt-2">
-               Medical Record Summary Protocol • MRN: <span className="text-slate-900 font-bold">{selectedDoc?.patientMrn || patient.mrn}</span>
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="p-10 space-y-10 overflow-y-auto max-h-[60vh] scrollbar-hide">
-            <div className="aspect-[16/10] rounded-[2rem] border border-slate-100 bg-slate-50 overflow-hidden relative group shadow-inner">
-               <img 
-                 src={selectedDoc?.thumbnail} 
-                 alt="Report Preview" 
-                 className="w-full h-full object-contain p-8 group-hover:scale-105 transition-transform duration-1000" 
-               />
-               <div className="absolute inset-x-0 bottom-0 p-6 bg-gradient-to-t from-black/20 to-transparent flex justify-center translate-y-4 group-hover:translate-y-0 opacity-0 group-hover:opacity-100 transition-all">
-                 <Button size="lg" className="bg-white/90 backdrop-blur-md shadow-xl rounded-2xl text-slate-900 text-xs font-bold gap-3 border-none hover:bg-white h-12 px-8">
-                   <Eye className="h-4 w-4 text-indigo-600" /> View Master Integrity File
-                 </Button>
-               </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-10">
-               <div className="space-y-6">
-                  <div className="space-y-2">
-                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] ml-1">Upload Lifecycle</p>
-                     <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-4">
-                        <Calendar className="h-5 w-5 text-indigo-400" />
-                        <div>
-                           <p className="text-[10px] text-slate-400 font-bold uppercase leading-none mb-1">Date Indexed</p>
-                           <p className="text-sm font-bold text-slate-800">{selectedDoc?.uploadDate}</p>
-                        </div>
-                     </div>
-                  </div>
-                  <div className="space-y-2">
-                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] ml-1">Verification Agent</p>
-                     <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-4">
-                        <Users className="h-5 w-5 text-indigo-400" />
-                        <div>
-                           <p className="text-[10px] text-slate-400 font-bold uppercase leading-none mb-1">Medical Staff</p>
-                           <p className="text-sm font-bold text-slate-800">{selectedDoc?.uploadedBy || 'Senior Registrar'}</p>
-                        </div>
-                     </div>
-                  </div>
-               </div>
-               <div className="space-y-6">
-                  <div className="space-y-2">
-                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] ml-1">Department Scope</p>
-                     <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-4">
-                        <Plus className="h-5 w-5 text-indigo-400" />
-                        <div>
-                           <p className="text-[10px] text-slate-400 font-bold uppercase leading-none mb-1">Allocation</p>
-                           <p className="text-sm font-bold text-slate-800">{selectedDoc?.departmentName || 'Diagnostic Services'}</p>
-                        </div>
-                     </div>
-                  </div>
-                  <div className="space-y-2">
-                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] ml-1">Protocol Status</p>
-                     <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100 flex items-center gap-4">
-                        <Shield className="h-5 w-5 text-emerald-500" />
-                        <div>
-                           <p className="text-[10px] text-emerald-600 font-bold uppercase leading-none mb-1">Integrity Check</p>
-                           <p className="text-sm font-bold text-emerald-700">Verified Secure</p>
-                        </div>
-                     </div>
-                  </div>
-               </div>
-            </div>
-
-            <div className="space-y-3">
-               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] ml-1">Clinical Meta Analysis</p>
-               <div className="p-6 bg-indigo-50/30 rounded-[2rem] border border-dashed border-indigo-100 relative group overflow-hidden">
-                  <FileText className="absolute -top-6 -right-6 h-20 w-20 text-indigo-100 opacity-20 transform rotate-12" />
-                  <p className="text-sm text-slate-600 leading-relaxed italic font-medium relative z-10">
-                    "{selectedDoc?.notes || 'Biological verification loop complete. No further corrective observations were appended to this document bundle during initialization.'}"
-                  </p>
-               </div>
-            </div>
-          </div>
-
-          <div className="p-10 bg-slate-50 border-t border-slate-100 mt-auto flex items-center justify-between gap-8 shrink-0">
-             <Button variant="ghost" className="rounded-2xl h-14 px-8 text-slate-400 font-bold uppercase tracking-widest text-xs hover:bg-white" onClick={() => setSelectedDoc(null)}>Abort Interface</Button>
-             <div className="flex gap-4">
-                <Button variant="outline" className="h-14 px-8 rounded-2xl border-slate-200 text-slate-600 font-bold uppercase tracking-widest text-xs bg-white hover:bg-slate-50 shadow-sm gap-3">
-                   <Download className="h-4 w-4" /> Download Bundle ({selectedDoc?.filesCount || 1})
+        <DialogContent className="sm:max-w-[95vw] md:max-w-[1400px] h-[90vh] rounded-[2.5rem] p-0 border-none shadow-2xl flex flex-col overflow-hidden bg-[#F8FAFC]">
+          {/* Main Header */}
+          <div className="h-20 bg-white border-b border-slate-100 flex items-center justify-between px-10 shrink-0">
+             <div className="flex items-center gap-4">
+                <div className="h-10 w-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-100">
+                   <Files className="h-5 w-5" />
+                </div>
+                <div>
+                   <h2 className="text-sm font-bold text-slate-900 tracking-tight leading-none mb-1">Clinical Diagnostic Workspace</h2>
+                   <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest leading-none">
+                     DOC-{selectedDoc?.id?.slice(-4).toUpperCase()} • {patientDocs.length} RECORDS
+                   </p>
+                </div>
+             </div>
+             
+             <div className="flex items-center gap-6">
+                <div className="hidden md:flex items-center gap-2 px-4 py-2 bg-slate-50 border border-slate-100 rounded-xl">
+                   <ShieldCheck className="h-4 w-4 text-slate-400" />
+                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.15em]">Enterprise Secured</span>
+                </div>
+                <Button variant="ghost" size="icon" className="h-10 w-10 text-slate-300 hover:text-slate-600 rounded-full" onClick={() => setSelectedDoc(null)}>
+                   <ArrowLeft className="h-5 w-5" />
                 </Button>
-                <Button className="h-14 px-10 rounded-2xl bg-indigo-600 text-white font-bold uppercase tracking-widest text-xs shadow-xl shadow-indigo-100">Sync Master Record</Button>
              </div>
           </div>
-        </DialogContent>
+
+          <div className="flex-1 flex flex-col md:flex-row overflow-hidden p-6 gap-6">
+            {/* Left Column: Viewer */}
+            <div className="flex-1 bg-white rounded-[2rem] border border-slate-100 shadow-sm flex flex-col overflow-hidden">
+               {/* Viewer Toolbar */}
+               <div className="h-14 bg-slate-50/50 border-b border-slate-50 px-6 flex items-center justify-between shrink-0">
+                  <div className="flex items-center gap-3">
+                     <FileText className="h-4 w-4 text-indigo-500" />
+                     <span className="text-xs font-bold text-slate-600 truncate max-w-[200px]">{selectedDoc?.fileName}</span>
+                  </div>
+                  
+                  <div className="flex items-center gap-6">
+                     <div className="flex items-center gap-4 bg-white border border-slate-100 rounded-lg px-3 py-1">
+                        <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-indigo-600"><Search className="h-3.5 w-3.5" /></Button>
+                        <span className="text-[10px] font-bold text-slate-400">100%</span>
+                        <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-indigo-600"><Plus className="h-3.5 w-3.5" /></Button>
+                     </div>
+                     
+                     <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2 bg-white border border-slate-100 rounded-lg px-3 py-1">
+                           <Button variant="ghost" size="icon" className="h-5 w-5 text-slate-300"><ChevronLeft className="h-3.5 w-3.5" /></Button>
+                           <span className="text-[10px] font-bold text-slate-400">1/1</span>
+                           <Button variant="ghost" size="icon" className="h-5 w-5 text-slate-300"><ChevronRight className="h-3.5 w-3.5" /></Button>
+                        </div>
+                        <Button variant="secondary" size="icon" className="h-8 w-8 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100"><Download className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-slate-400 hover:text-slate-600"><Share2 className="h-4 w-4" /></Button>
+                     </div>
+                  </div>
+               </div>
+
+               {/* Document Display Area */}
+               <div className="flex-1 bg-[#475569] p-8 flex items-center justify-center overflow-auto scrollbar-hide">
+                  <div className="w-full max-w-4xl bg-white shadow-[0_40px_100px_-20px_rgba(0,0,0,0.5)] rounded-sm overflow-hidden min-h-[80%]">
+                    {selectedDoc?.fileUrl?.toLowerCase().endsWith('.pdf') ? (
+                      <iframe src={`${selectedDoc.fileUrl}#toolbar=0`} className="w-full h-[1200px] border-none" />
+                    ) : (
+                      <img src={selectedDoc?.fileUrl} className="w-full h-auto" alt="Clinical Document" />
+                    )}
+                  </div>
+               </div>
+            </div>
+
+            {/* Right Column: Sidebar - Scrollable for smaller screens */}
+            <div className="w-full md:w-[400px] flex flex-col gap-6 overflow-y-auto scrollbar-hide pr-2">
+               {/* Metadata Section */}
+               <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-8 flex flex-col gap-8 shrink-0">
+                  <div className="flex items-center gap-3">
+                     <div className="h-5 w-5 rounded-full bg-indigo-50 flex items-center justify-center">
+                        <Activity className="h-3 w-3 text-indigo-600" />
+                     </div>
+                     <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Diagnostic Details</h3>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-y-8 gap-x-12">
+                     <div className="space-y-1.5">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">Diagnostic ID</p>
+                        <p className="text-xs font-bold text-slate-900">DOC-{selectedDoc?.id?.slice(-4).toUpperCase()}</p>
+                     </div>
+                     <div className="space-y-1.5">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">Entry Date</p>
+                        <p className="text-xs font-bold text-slate-900">{selectedDoc && new Date(selectedDoc.uploadDate).toLocaleDateString()}</p>
+                     </div>
+                     <div className="space-y-1.5">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">Patient MRN</p>
+                        <p className="text-xs font-bold text-slate-900">{patient.mrn}</p>
+                     </div>
+                     <div className="space-y-1.5">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">Record Type</p>
+                        <p className="text-xs font-bold text-slate-900 truncate">{selectedDoc?.type}</p>
+                     </div>
+                     <div className="space-y-1.5">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">Dept Scope</p>
+                        <p className="text-xs font-bold text-slate-900">Diagnostics</p>
+                     </div>
+                     <div className="space-y-1.5">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">Sync Agent</p>
+                        <p className="text-xs font-bold text-indigo-600">{uploaderDoc?.name?.split(' ')[0] || 'Medical'}</p>
+                     </div>
+                  </div>
+               </div>
+
+               {/* Care Observations Section */}
+               <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-8 flex flex-col gap-4 shrink-0">
+                  <div className="flex items-center gap-3">
+                     <div className="h-5 w-5 rounded-full bg-emerald-50 flex items-center justify-center">
+                        <ClipboardList className="h-3 w-3 text-emerald-600" />
+                     </div>
+                     <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Care Observations</h3>
+                  </div>
+                  <div className="space-y-2">
+                     <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">Collaboration logs and patient notes</p>
+                     <div className="p-4 bg-slate-50/50 rounded-2xl border border-slate-100 min-h-[80px]">
+                        <p className="text-xs text-slate-600 leading-relaxed italic font-medium">
+                          "{selectedDoc?.notes || 'No specific clinical observations were recorded for this document bundle.'}"
+                        </p>
+                     </div>
+                  </div>
+               </div>
+
+               {/* Related Documents Section */}
+               <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-8 flex flex-col shrink-0">
+                  <div className="flex items-center justify-between mb-6">
+                     <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Related Archives</h3>
+                     <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-300"><History className="h-3.5 w-3.5" /></Button>
+                  </div>
+
+                  <div className="relative mb-6">
+                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                     <Input 
+                       placeholder="Explorer search..." 
+                       className="pl-9 h-10 rounded-xl border-slate-100 bg-slate-50/50 text-xs font-medium placeholder:text-slate-400 focus-visible:ring-indigo-600/10"
+                     />
+                  </div>
+
+                  <div className="space-y-3">
+                     {patientDocs.map((doc) => (
+                        <div 
+                          key={doc.id} 
+                          className={cn(
+                            "group p-3 rounded-2xl border transition-all cursor-pointer flex items-center gap-3",
+                            doc.id === selectedDoc?.id ? "bg-indigo-50/50 border-indigo-100" : "bg-white border-slate-50 hover:border-slate-200"
+                          )}
+                          onClick={() => setSelectedDoc(doc)}
+                        >
+                           <div className="h-9 w-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 group-hover:bg-white transition-colors">
+                              <FileText className="h-4.5 w-4.5" />
+                           </div>
+                           <div className="min-w-0 flex-1">
+                              <p className="text-[11px] font-bold text-slate-900 truncate">{doc.fileName}</p>
+                              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter mt-0.5">{doc.type} • {new Date(doc.uploadDate).toLocaleDateString()}</p>
+                           </div>
+                           <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-lg"><Download className="h-3.5 w-3.5" /></Button>
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-300 hover:text-rose-500 hover:bg-white rounded-lg" onClick={(e) => {e.stopPropagation(); deleteDocument(doc.id);}}><Trash2 className="h-3.5 w-3.5" /></Button>
+                           </div>
+                        </div>
+                     ))}
+                  </div>
+                  </div>
+               </div>
+            </div>
+         </DialogContent>
       </Dialog>
     </motion.div>
   );

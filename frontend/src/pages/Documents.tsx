@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Search, 
@@ -66,18 +66,22 @@ import { useHospitalStore } from '@/store/hospitalStore';
 import { Document } from '@/types';
 
 const Documents = () => {
-  const { documents } = useHospitalStore();
+  const { documents, fetchAllDocuments } = useHospitalStore();
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [selectedDoc, setSelectedDoc] = useState<Document | null>(null);
 
+  useEffect(() => {
+    fetchAllDocuments();
+  }, []);
+
   const filteredDocs = documents.filter(doc => {
     const matchesSearch = 
-      doc.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      doc.patientMrn.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (doc.patientName?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false) ||
+      (doc.patientMrn?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false) ||
       doc.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      doc.applicationId.toLowerCase().includes(searchTerm.toLowerCase());
+      doc.fileName.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesType = typeFilter === 'all' || doc.type === typeFilter;
     return matchesSearch && matchesType;
   });
@@ -194,13 +198,13 @@ const Documents = () => {
                       >
                         <TableCell className="py-4 pl-6">
                            <span className="text-xs font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
-                             {doc.applicationId}
+                             DOC-{doc.id.slice(-4).toUpperCase()}
                            </span>
                         </TableCell>
                         <TableCell className="py-4">
                           <div>
-                            <p className="font-bold text-slate-900 text-sm">{doc.patientName}</p>
-                            <p className="text-[10px] text-slate-400 font-medium">{doc.patientMrn}</p>
+                            <p className="font-bold text-slate-900 text-sm">{doc.patientName || 'Anonymous'}</p>
+                            <p className="text-[10px] text-slate-400 font-medium">{doc.patientMrn || 'N/A'}</p>
                           </div>
                         </TableCell>
                         <TableCell className="py-4">
@@ -210,24 +214,24 @@ const Documents = () => {
                              </div>
                              <div>
                                <p className="text-xs font-bold text-slate-800">{doc.type}</p>
-                               <p className="text-[10px] text-slate-400 font-medium">{doc.departmentName || 'General'}</p>
+                               <p className="text-[10px] text-slate-400 font-medium">{doc.fileName}</p>
                              </div>
                           </div>
                         </TableCell>
                         <TableCell className="py-4">
                            <Badge variant="secondary" className="bg-slate-100 text-slate-600 text-[10px] font-bold rounded px-1.5 h-5 border-none">
-                             {doc.filesCount || 1} Files
+                             1 File
                            </Badge>
                         </TableCell>
                         <TableCell className="py-4">
-                           <p className="text-xs font-medium text-slate-500">{doc.latestActivity || doc.uploadDate}</p>
+                           <p className="text-xs font-medium text-slate-500">{new Date(doc.uploadDate).toLocaleDateString()}</p>
                         </TableCell>
                         <TableCell className="py-4 text-right pr-6" onClick={(e) => e.stopPropagation()}>
                            <div className="flex items-center justify-end gap-1">
                               <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50" onClick={() => setSelectedDoc(doc)}>
                                 <Eye className="h-4 w-4" />
                               </Button>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-slate-600 hover:bg-slate-100">
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-slate-600 hover:bg-slate-100" onClick={() => window.open(doc.fileUrl)}>
                                 <Download className="h-4 w-4" />
                               </Button>
                               <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400">
@@ -245,24 +249,28 @@ const Documents = () => {
             <div className="p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {filteredDocs.map((doc, i) => (
                 <Card key={doc.id} className="bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all overflow-hidden group border">
-                  <div className="aspect-video relative bg-slate-50 cursor-pointer overflow-hidden border-b border-slate-200" onClick={() => setSelectedDoc(doc)}>
-                    <img src={doc.thumbnail} alt={doc.type} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                  <div className="aspect-video relative bg-slate-50 cursor-pointer overflow-hidden border-b border-slate-200 flex items-center justify-center" onClick={() => setSelectedDoc(doc)}>
+                    {doc.fileUrl.match(/\.(jpg|jpeg|png|gif)$/i) ? (
+                      <img src={doc.fileUrl} alt={doc.type} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                    ) : (
+                      <FileText className="h-12 w-12 text-indigo-100 group-hover:scale-110 transition-transform" />
+                    )}
                     <div className="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/20 transition-colors" />
                     <Badge className="absolute top-2 left-2 bg-white/90 backdrop-blur-sm text-slate-900 border-none text-[9px] uppercase font-bold shadow-sm h-5">
-                      {doc.applicationId}
+                      DOC-{doc.id.slice(-4).toUpperCase()}
                     </Badge>
                   </div>
                   <CardHeader className="p-4 space-y-1">
-                    <CardTitle className="text-sm font-bold text-slate-900 truncate leading-none">{doc.patientName}</CardTitle>
+                    <CardTitle className="text-sm font-bold text-slate-900 truncate leading-none">{doc.patientName || 'Anonymous'}</CardTitle>
                     <CardDescription className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
-                      <Tag className="h-3 w-3" /> {doc.type} • {doc.uploadDate}
+                      <Tag className="h-3 w-3" /> {doc.type} • {new Date(doc.uploadDate).toLocaleDateString()}
                     </CardDescription>
                   </CardHeader>
                   <CardFooter className="px-4 py-3 bg-slate-50 border-t border-slate-100 flex justify-between items-center">
-                    <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest leading-none">By {doc.uploadedBy.split(' ')[1]}</span>
+                    <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest leading-none">Verified Record</span>
                     <div className="flex gap-1">
                        <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-indigo-600 rounded-md" onClick={() => setSelectedDoc(doc)}><Eye className="h-3.5 w-3.5" /></Button>
-                       <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-slate-600 rounded-md"><Download className="h-3.5 w-3.5" /></Button>
+                       <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-slate-600 rounded-md" onClick={() => window.open(doc.fileUrl)}><Download className="h-3.5 w-3.5" /></Button>
                     </div>
                   </CardFooter>
                 </Card>

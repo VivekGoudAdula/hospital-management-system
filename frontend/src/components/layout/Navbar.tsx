@@ -93,8 +93,7 @@ const Navbar = () => {
         <DropdownMenu>
           <DropdownMenuTrigger className="relative h-12 w-auto flex items-center gap-3 p-1 pr-4 rounded-2xl bg-white border border-slate-100 hover:bg-slate-50 transition-all shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-indigo-600/20">
             <Avatar className="h-9 w-9 rounded-xl border border-slate-100">
-              <AvatarImage src={user?.avatar} alt={user?.name} className="object-cover" />
-              <AvatarFallback className="bg-indigo-50 text-indigo-600 text-xs font-bold rounded-xl">{user?.name.charAt(0)}</AvatarFallback>
+              <AvatarFallback className="bg-indigo-50 text-indigo-600 text-xs font-bold rounded-xl">{user?.name?.charAt(0) || 'A'}</AvatarFallback>
             </Avatar>
             <div className="flex flex-col items-start hidden sm:flex">
               <span className="text-xs font-bold text-slate-900 leading-tight">{user?.name}</span>

@@ -17,6 +17,25 @@ interface HospitalState {
   documents: Document[];
   notes: Note[];
   isLoading: boolean;
+  stats: {
+    total_patients: number;
+    total_doctors: number;
+    total_departments: number;
+    total_documents: number;
+    admitted_now: number;
+    critical_care: number;
+    out_patient: number;
+    discharged: number;
+    trends: {
+      patients: string;
+      doctors: string;
+      services: string;
+      records: string;
+    };
+  } | null;
+  
+  // Stats Actions
+  fetchStats: () => Promise<void>;
   
   // Department Actions
   fetchDepartments: () => Promise<void>;
@@ -36,10 +55,17 @@ interface HospitalState {
   deleteAvailability: (slotId: string) => Promise<void>;
   
   // Patient Actions
-  addPatient: (patient: Patient) => void;
+  fetchPatients: (filters?: any) => Promise<void>;
+  addPatient: (patientData: any) => Promise<any>;
+  fetchPatientById: (id: string) => Promise<Patient>;
+  updatePatient: (id: string, patientData: any) => Promise<void>;
+  updatePatientStatus: (id: string, status: string) => Promise<void>;
   
   // Document Actions
-  addDocument: (doc: Document) => void;
+  fetchPatientDocuments: (patientId: string) => Promise<void>;
+  fetchAllDocuments: () => Promise<void>;
+  uploadDocument: (formData: FormData) => Promise<void>;
+  deleteDocument: (id: string) => Promise<void>;
   
   // Note Actions
   addNote: (note: Note) => void;
@@ -48,16 +74,26 @@ interface HospitalState {
 export const useHospitalStore = create<HospitalState>((set, get) => ({
   departments: [],
   doctors: [],
-  patients: initialPatients,
-  documents: initialDocuments.map((d, i) => ({
-    ...d,
-    applicationId: `APP-00${i + 1}`,
-    filesCount: Math.floor(Math.random() * 5) + 1,
-    latestActivity: d.uploadDate,
-    departmentName: 'Cardiology'
-  })),
+  patients: [],
+  documents: [],
   notes: initialNotes,
   isLoading: false,
+  stats: null,
+
+  fetchStats: async () => {
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch(`${API_URL}/stats/dashboard`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        set({ stats: data });
+      }
+    } catch (error) {
+      console.error('Fetch stats error:', error);
+    }
+  },
 
   fetchDepartments: async () => {
     try {
@@ -210,9 +246,303 @@ export const useHospitalStore = create<HospitalState>((set, get) => ({
     }
   },
 
-  addPatient: (patient) => set((state) => ({ patients: [...state.patients, patient] })),
+  fetchPatients: async (filters = {}) => {
+    set({ isLoading: true });
+    const token = localStorage.getItem('token');
+    try {
+      const params = new URLSearchParams();
+      if (filters.name) params.append('name', filters.name);
+      if (filters.mrn) params.append('mrn', filters.mrn);
+      if (filters.phone) params.append('phone', filters.phone);
+      if (filters.status) params.append('status', filters.status);
+      if (filters.doctor_id) params.append('doctor_id', filters.doctor_id);
+      
+      const response = await fetch(`${API_URL}/patients?${params.toString()}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        // Map backend fields to frontend fields
+        const mappedPatients = data.map((p: any) => ({
+          id: p.id,
+          mrn: p.mrn,
+          name: p.full_name,
+          dob: p.dob,
+          gender: p.gender.charAt(0).toUpperCase() + p.gender.slice(1),
+          bloodGroup: p.blood_group,
+          phone: p.phone,
+          email: p.email,
+          address: p.address,
+          emergencyContact: p.emergency_contact,
+          insuranceInfo: p.insurance_info,
+          status: p.status.charAt(0).toUpperCase() + p.status.slice(1),
+          assignedDoctorId: p.assigned_doctor_id
+        }));
+        set({ patients: mappedPatients });
+      }
+    } catch (error) {
+      console.error('Fetch patients error:', error);
+    } finally {
+      set({ isLoading: false });
+    }
+  },
 
-  addDocument: (doc) => set((state) => ({ documents: [...state.documents, doc] })),
+  addPatient: async (patientData) => {
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch(`${API_URL}/patients`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(patientData),
+      });
+      if (response.ok) {
+        const result = await response.json();
+        await get().fetchPatients();
+        return result;
+      } else {
+        const error = await response.json();
+        throw new Error(error.detail || 'Failed to create patient');
+      }
+    } catch (error) {
+      console.error('Add patient error:', error);
+      throw error;
+    }
+  },
 
-  addNote: (note) => set((state) => ({ notes: [...state.notes, note] })),
+  fetchPatientById: async (id) => {
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch(`${API_URL}/patients/${id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const p = await response.json();
+        return {
+          id: p.id,
+          mrn: p.mrn,
+          name: p.full_name,
+          dob: p.dob,
+          gender: p.gender.charAt(0).toUpperCase() + p.gender.slice(1),
+          bloodGroup: p.blood_group,
+          phone: p.phone,
+          email: p.email,
+          address: p.address,
+          emergencyContact: p.emergency_contact,
+          insuranceInfo: p.insurance_info,
+          status: p.status.charAt(0).toUpperCase() + p.status.slice(1),
+          assignedDoctorId: p.assigned_doctor_id
+        } as Patient;
+      }
+    } catch (error) {
+      console.error('Fetch patient error:', error);
+    }
+    throw new Error('Patient not found');
+  },
+
+  deletePatient: async (id) => {
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch(`${API_URL}/patients/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (response.ok) {
+        await get().fetchPatients();
+      } else {
+        const error = await response.json();
+        throw new Error(error.detail || 'Failed to delete patient');
+      }
+    } catch (error) {
+      console.error('Delete patient error:', error);
+      throw error;
+    }
+  },
+
+  updatePatient: async (id, patientData) => {
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch(`${API_URL}/patients/${id}`, {
+        method: 'PATCH',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(patientData),
+      });
+      if (response.ok) {
+        await get().fetchPatients();
+      }
+    } catch (error) {
+      console.error('Update patient error:', error);
+    }
+  },
+
+  updatePatientStatus: async (id, status) => {
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch(`${API_URL}/patients/${id}/status`, {
+        method: 'PATCH',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ status: status.toLowerCase() }),
+      });
+      if (response.ok) {
+        await get().fetchPatients();
+      }
+    } catch (error) {
+      console.error('Update patient status error:', error);
+    }
+  },
+
+  fetchPatientDocuments: async (patientId) => {
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch(`${API_URL}/documents?patient_id=${patientId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const mappedDocs = data.map((d: any) => ({
+          id: d.id,
+          type: d.file_type,
+          patientId: d.patient_id,
+          fileUrl: `http://localhost:8000${d.file_url}`,
+          fileName: d.file_name,
+          notes: d.notes,
+          uploadDate: d.created_at,
+          uploadedBy: d.uploaded_by
+        }));
+        set({ documents: mappedDocs });
+      }
+    } catch (error) {
+      console.error('Fetch documents error:', error);
+    }
+  },
+
+  fetchAllDocuments: async () => {
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch(`${API_URL}/documents`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const mappedDocs = data.map((d: any) => ({
+          id: d.id,
+          type: d.file_type,
+          patientId: d.patient_id,
+          fileUrl: `http://localhost:8000${d.file_url}`,
+          fileName: d.file_name,
+          notes: d.notes,
+          uploadDate: d.created_at,
+          uploadedBy: d.uploaded_by,
+          patientName: d.patient_name,
+          patientMrn: d.patient_mrn
+        }));
+        set({ documents: mappedDocs });
+      }
+    } catch (error) {
+      console.error('Fetch all documents error:', error);
+    }
+  },
+
+  uploadDocument: async (formData) => {
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch(`${API_URL}/documents/upload`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData,
+      });
+      if (response.ok) {
+        const patientId = formData.get('patient_id') as string;
+        if (patientId) await get().fetchPatientDocuments(patientId);
+      } else {
+        const error = await response.json();
+        throw new Error(error.detail || 'Failed to upload document');
+      }
+    } catch (error) {
+      console.error('Upload document error:', error);
+      throw error;
+    }
+  },
+
+  deleteDocument: async (id) => {
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch(`${API_URL}/documents/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (response.ok) {
+        set((state) => ({ documents: state.documents.filter((d) => d.id !== id) }));
+      }
+    } catch (error) {
+      console.error('Delete document error:', error);
+    }
+  },
+
+  addNote: async (noteData: any) => {
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch(`${API_URL}/notes`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(noteData),
+      });
+      if (response.ok) {
+        const newNote = await response.json();
+        set((state) => ({ 
+          notes: [
+            {
+              id: newNote.id,
+              patientId: newNote.patient_id,
+              authorName: newNote.author_name,
+              authorRole: newNote.author_role,
+              content: newNote.content,
+              createdAt: newNote.created_at
+            } as Note, 
+            ...state.notes
+          ] 
+        }));
+      }
+    } catch (error) {
+      console.error('Add note error:', error);
+    }
+  },
+
+  fetchNotesByPatient: async (patientId: string) => {
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch(`${API_URL}/notes/patient/${patientId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const mappedNotes = data.map((n: any) => ({
+          id: n.id,
+          patientId: n.patient_id,
+          authorName: n.author_name,
+          authorRole: n.author_role,
+          content: n.content,
+          createdAt: n.created_at
+        })) as Note[];
+        set((state) => {
+          // Filter out existing notes for this patient and add the new ones
+          const otherNotes = state.notes.filter(note => note.patientId !== patientId);
+          return { notes: [...mappedNotes, ...otherNotes] };
+        });
+      }
+    } catch (error) {
+      console.error('Fetch notes error:', error);
+    }
+  },
 }));

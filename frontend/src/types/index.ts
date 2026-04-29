@@ -78,20 +78,15 @@ export interface Patient {
 
 export interface Document {
   id: string;
-  applicationId: string;
-  type: string;
   patientId: string;
-  patientName: string;
-  patientMrn: string;
-  uploadDate: string;
-  thumbnail: string;
+  type: string;
+  fileName: string;
   fileUrl: string;
   notes: string;
-  departmentId?: string;
-  departmentName?: string;
-  filesCount: number;
-  latestActivity: string;
-  uploadedBy: string;
+  uploadDate: string;
+  patientName?: string;
+  patientMrn?: string;
+  uploadedBy?: string;
 }
 
 export interface Note {

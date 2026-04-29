@@ -63,21 +63,78 @@ import {
 import { toast } from 'sonner';
 
 const Patients = () => {
-  const { patients, addPatient } = useHospitalStore();
+  const { patients, fetchPatients, addPatient, deletePatient, doctors, fetchDoctors, stats, fetchStats } = useHospitalStore();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Form State
+  const [formData, setFormData] = useState({
+    full_name: '',
+    dob: '',
+    gender: 'male',
+    blood_group: 'O+',
+    phone: '',
+    email: '',
+    assigned_doctor_id: '',
+    insurance_info: '',
+    emergency_contact: '',
+    address: ''
+  });
+
+  React.useEffect(() => {
+    fetchPatients();
+    fetchDoctors();
+    fetchStats();
+  }, []);
 
   const filteredPatients = patients.filter(patient => 
     patient.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     patient.mrn.toLowerCase().includes(searchTerm.toLowerCase()) ||
     patient.phone.includes(searchTerm)
   );
+  
+  const handleDeletePatient = async (id: string, name: string) => {
+    if (confirm(`Are you sure you want to decommission the record for ${name}? This action cannot be reversed.`)) {
+      try {
+        await deletePatient(id);
+        toast.success(`Patient record ${name} has been purged from master registry.`);
+      } catch (error: any) {
+        toast.error(error.message);
+      }
+    }
+  };
 
-  const handleCreatePatient = (e: React.FormEvent) => {
+  const handleCreatePatient = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast.success('Patient registry created successfully');
-    setIsDialogOpen(false);
+    setIsSubmitting(true);
+    try {
+      const result = await addPatient(formData);
+      if (result.is_duplicate) {
+        toast.warning(result.message);
+      } else {
+        toast.success('Patient registry created successfully');
+      }
+      setIsDialogOpen(false);
+      // Reset form
+      setFormData({
+        full_name: '',
+        dob: '',
+        gender: 'male',
+        blood_group: 'O+',
+        phone: '',
+        email: '',
+        assigned_doctor_id: '',
+        insurance_info: '',
+        emergency_contact: '',
+        address: ''
+      });
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to create patient');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -101,41 +158,53 @@ const Patients = () => {
               <Filter className="h-4 w-4 mr-2" /> Filter List
            </Button>
            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-              <DialogTrigger render={
+              <DialogTrigger asChild>
                 <Button size="lg" className="rounded-2xl bg-indigo-600 text-white shadow-xl shadow-indigo-100 gap-3 h-12 px-6 group">
                   <Plus className="h-5 w-5 bg-white/20 rounded-lg p-1" />
                   <span className="font-bold text-xs uppercase tracking-widest">New Admission</span>
                 </Button>
-              } />
+              </DialogTrigger>
               <DialogContent className="sm:max-w-3xl rounded-[2.5rem] overflow-hidden p-0 border-none shadow-2xl">
-                <DialogHeader className="p-10 bg-gradient-to-br from-indigo-600 to-indigo-700 text-white relative">
+                <DialogHeader className="p-6 bg-gradient-to-br from-indigo-600 to-indigo-700 text-white relative">
                   <div className="absolute top-0 right-0 p-8 opacity-10 blur-xl">
                      <Users className="h-40 w-40" />
                   </div>
-                  <DialogTitle className="text-3xl font-bold tracking-tight">Clinical Admission</DialogTitle>
+                  <DialogTitle className="text-2xl font-bold tracking-tight">Clinical Admission</DialogTitle>
                   <DialogDescription className="text-indigo-100 font-medium text-base">
                     Initialize a new enterprise health record for incoming clinical entities.
                   </DialogDescription>
                 </DialogHeader>
-                <form onSubmit={handleCreatePatient} className="px-10 pb-10 pt-8 space-y-8 max-h-[70vh] overflow-y-auto bg-white scrollbar-hide">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                    <div className="space-y-6">
+                <form id="patient-form" onSubmit={handleCreatePatient} className="px-8 pb-8 pt-6 space-y-6 max-h-[60vh] overflow-y-auto bg-white scrollbar-hide">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="space-y-4">
                       <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
                          <div className="h-6 w-1 bg-indigo-500 rounded-full" />
                          <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">Personal Identity</h3>
                       </div>
                       <div className="grid gap-3">
                         <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Entity Full Name</Label>
-                        <Input placeholder="E.g. Michael Smith" className="h-12 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all font-medium" />
+                        <Input 
+                          placeholder="E.g. Michael Smith" 
+                          className="h-12 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all font-medium"
+                          value={formData.full_name}
+                          onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+                          required
+                        />
                       </div>
                       <div className="grid grid-cols-2 gap-6">
                         <div className="grid gap-3">
                           <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Birth Protocol</Label>
-                          <Input type="date" className="h-12 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all font-medium" />
+                          <Input 
+                            type="date" 
+                            className="h-12 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all font-medium"
+                            value={formData.dob}
+                            onChange={(e) => setFormData({ ...formData, dob: e.target.value })}
+                            required
+                          />
                         </div>
                         <div className="grid gap-3">
                           <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Bio Gender</Label>
-                          <Select>
+                          <Select value={formData.gender} onValueChange={(v) => setFormData({ ...formData, gender: v })}>
                             <SelectTrigger className="h-12 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all font-medium">
                               <SelectValue placeholder="Specify" />
                             </SelectTrigger>
@@ -150,7 +219,7 @@ const Patients = () => {
                       <div className="grid grid-cols-2 gap-6">
                         <div className="grid gap-3">
                         <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Blood Archetype</Label>
-                          <Select>
+                          <Select value={formData.blood_group} onValueChange={(v) => setFormData({ ...formData, blood_group: v })}>
                             <SelectTrigger className="h-12 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all font-medium">
                               <SelectValue placeholder="Select" />
                             </SelectTrigger>
@@ -163,47 +232,79 @@ const Patients = () => {
                         </div>
                         <div className="grid gap-3">
                           <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Relay Contact</Label>
-                          <Input placeholder="+1 (555) 000-0000" className="h-12 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all font-medium" />
+                          <Input 
+                            placeholder="+1 (555) 000-0000" 
+                            className="h-12 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all font-medium"
+                            value={formData.phone}
+                            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                            required
+                          />
                         </div>
+                      </div>
+                      <div className="grid gap-3">
+                        <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Email Protocol</Label>
+                        <Input 
+                          type="email"
+                          placeholder="michael@example.com" 
+                          className="h-12 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all font-medium"
+                          value={formData.email}
+                          onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                        />
                       </div>
                     </div>
 
-                    <div className="space-y-6">
+                    <div className="space-y-4">
                       <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
                          <div className="h-6 w-1 bg-indigo-500 rounded-full" />
                          <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">Clinical Allocation</h3>
                       </div>
                       <div className="grid gap-3">
                         <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Lead Physician</Label>
-                        <Select>
+                        <Select value={formData.assigned_doctor_id} onValueChange={(v) => setFormData({ ...formData, assigned_doctor_id: v })}>
                           <SelectTrigger className="h-12 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all font-medium">
                             <SelectValue placeholder="Assign Master Doctor" />
                           </SelectTrigger>
                           <SelectContent className="rounded-2xl border-slate-100 shadow-xl p-2">
-                            <SelectItem value="d1" className="rounded-xl">Dr. Sarah Johnson (Cardiology)</SelectItem>
-                            <SelectItem value="d2" className="rounded-xl">Dr. Michael Chen (Neurology)</SelectItem>
+                            {doctors.map(doc => (
+                              <SelectItem key={doc.id} value={doc.id} className="rounded-xl">{doc.name} ({doc.specialization})</SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       </div>
                       <div className="grid gap-3">
                         <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Insurance Protocol</Label>
-                        <Input placeholder="E.g. BlueCross Apex" className="h-12 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all font-medium" />
+                        <Input 
+                          placeholder="E.g. BlueCross Apex" 
+                          className="h-12 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all font-medium"
+                          value={formData.insurance_info}
+                          onChange={(e) => setFormData({ ...formData, insurance_info: e.target.value })}
+                        />
                       </div>
                       <div className="grid gap-3">
                       <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Emergency Relay</Label>
-                        <Input placeholder="Name and Frequency" className="h-12 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all font-medium" />
+                        <Input 
+                          placeholder="Name and Frequency" 
+                          className="h-12 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all font-medium"
+                          value={formData.emergency_contact}
+                          onChange={(e) => setFormData({ ...formData, emergency_contact: e.target.value })}
+                        />
                       </div>
                       <div className="grid gap-3">
                       <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Base Residence</Label>
-                        <textarea className="w-full bg-slate-50 border-transparent rounded-2xl p-4 text-sm font-medium focus:bg-white focus:ring-2 focus:ring-indigo-100 outline-none transition-all resize-none min-h-[105px]" placeholder="Localized Residential Meta" />
+                        <textarea 
+                          className="w-full bg-slate-50 border-transparent rounded-2xl p-4 text-sm font-medium focus:bg-white focus:ring-2 focus:ring-indigo-100 outline-none transition-all resize-none min-h-[105px]" 
+                          placeholder="Localized Residential Meta" 
+                          value={formData.address}
+                          onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                        />
                       </div>
                     </div>
                   </div>
                 </form>
-                <div className="p-10 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-                  <Button variant="ghost" className="rounded-2xl h-14 px-8 text-slate-400 font-bold uppercase tracking-widest text-xs hover:bg-white" onClick={() => setIsDialogOpen(false)}>Abort Registry</Button>
-                  <Button type="submit" className="rounded-2xl h-14 px-12 bg-indigo-600 text-white font-bold text-sm uppercase tracking-widest shadow-xl shadow-indigo-100 group" onClick={handleCreatePatient}>
-                    Finalize Admission <ArrowRight className="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform" />
+                <div className="p-6 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+                  <Button variant="ghost" className="rounded-2xl h-12 px-8 text-slate-400 font-bold uppercase tracking-widest text-xs hover:bg-white" onClick={() => setIsDialogOpen(false)}>Abort Registry</Button>
+                  <Button type="submit" form="patient-form" className="rounded-2xl h-12 px-12 bg-indigo-600 text-white font-bold text-sm uppercase tracking-widest shadow-xl shadow-indigo-100 group" disabled={isSubmitting}>
+                    {isSubmitting ? 'Processing...' : 'Finalize Admission'} <ArrowRight className="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform" />
                   </Button>
                 </div>
               </DialogContent>
@@ -213,10 +314,10 @@ const Patients = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
         {[
-          { label: 'Total Enrolled', value: '12,842', color: 'text-indigo-600', bg: 'bg-indigo-50', icon: Users },
-          { label: 'Admitted Now', value: '184', color: 'text-emerald-600', bg: 'bg-emerald-50', icon: UserCheck },
-          { label: 'Out-Patient', value: '422', color: 'text-blue-600', bg: 'bg-blue-50', icon: Calendar },
-          { label: 'Critical Care', value: '12', color: 'text-rose-600', bg: 'bg-rose-50', icon: Layers },
+          { label: 'Total Enrolled', value: stats ? stats.total_patients.toLocaleString() : '...', color: 'text-indigo-600', bg: 'bg-indigo-50', icon: Users },
+          { label: 'Admitted Now', value: stats ? stats.admitted_now.toLocaleString() : '...', color: 'text-emerald-600', bg: 'bg-emerald-50', icon: UserCheck },
+          { label: 'Out-Patient', value: stats ? stats.out_patient.toLocaleString() : '...', color: 'text-blue-600', bg: 'bg-blue-50', icon: Calendar },
+          { label: 'Critical Care', value: stats ? stats.critical_care.toLocaleString() : '...', color: 'text-rose-600', bg: 'bg-rose-50', icon: Layers },
         ].map((stat, i) => (
           <div key={i} className="premium-card p-6 relative group overflow-hidden">
             <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:scale-110 transition-transform">
@@ -316,10 +417,21 @@ const Patients = () => {
                     </TableCell>
                     <TableCell className="text-right pr-10 py-6">
                       <div className="flex items-center justify-end gap-3 translate-x-2 group-hover:translate-x-0 transition-transform">
-                        <Button variant="ghost" size="icon" className="h-10 w-10 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all">
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-10 w-10 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeletePatient(patient.id, patient.name);
+                          }}
+                        >
+                          <Trash2 className="h-5 w-5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-10 w-10 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all" onClick={() => navigate(`/patients/${patient.id}`)}>
                           <Eye className="h-5 w-5" />
                         </Button>
-                        <div className="h-10 w-10 flex items-center justify-center rounded-2xl text-slate-300 group-hover:bg-indigo-600 group-hover:text-white transition-all shadow-indigo-100 group-hover:shadow-lg">
+                        <div className="h-10 w-10 flex items-center justify-center rounded-2xl text-slate-300 group-hover:bg-indigo-600 group-hover:text-white transition-all shadow-indigo-100 group-hover:shadow-lg" onClick={() => navigate(`/patients/${patient.id}`)}>
                            <ArrowRight className="h-5 w-5" />
                         </div>
                       </div>

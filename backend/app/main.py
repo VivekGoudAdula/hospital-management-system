@@ -1,9 +1,18 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+import os
 from .config.db import connect_to_mongo, close_mongo_connection
-from .routes import auth_routes, department_routes, doctor_routes
+from .routes import auth_routes, department_routes, doctor_routes, patient_routes, document_routes, stats_routes, note_routes
 
 app = FastAPI(title="ApexCare Backend")
+
+# Ensure uploads directory exists
+if not os.path.exists("uploads"):
+    os.makedirs("uploads")
+
+# Mount Static Files
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # CORS Setup
 app.add_middleware(
@@ -26,6 +35,10 @@ async def shutdown_db_client():
 app.include_router(auth_routes.router, prefix="/api")
 app.include_router(department_routes.router, prefix="/api")
 app.include_router(doctor_routes.router, prefix="/api")
+app.include_router(patient_routes.router, prefix="/api")
+app.include_router(document_routes.router, prefix="/api")
+app.include_router(stats_routes.router, prefix="/api")
+app.include_router(note_routes.router, prefix="/api")
 
 @app.get("/")
 async def root():
