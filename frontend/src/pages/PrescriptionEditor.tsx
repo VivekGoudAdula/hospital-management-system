@@ -193,6 +193,9 @@ export default function PrescriptionEditor() {
               </div>
             </div>
 
+            {/* Rx Symbol */}
+            <div className="text-4xl font-serif font-bold text-slate-900 pt-4">Rx</div>
+
             {/* Clinical Notes */}
             <div className="space-y-3">
               <h3 className="text-sm font-bold text-indigo-600 uppercase tracking-wider flex items-center gap-2">
@@ -205,9 +208,6 @@ export default function PrescriptionEditor() {
                 onChange={(e) => setClinicalNotes(e.target.value)}
               />
             </div>
-
-            {/* Rx Symbol */}
-            <div className="text-4xl font-serif font-bold text-slate-900 pt-4">Rx</div>
 
             {/* Medications Table */}
             <div className="space-y-4">
