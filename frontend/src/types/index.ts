@@ -26,29 +26,38 @@ export interface Department {
   icuSlots: number;
 }
 
+export interface DepartmentInfo {
+  id: string;
+  name: string;
+  is_primary: boolean;
+}
+
 export interface Doctor {
   id: string;
   name: string;
   email: string;
   password?: string;
   specialization: string;
-  subSpecialization?: string;
+  sub_specialization?: string;
   qualifications: string[];
-  experience: number;
-  registrationNumber: string;
-  primaryDepartmentId: string;
-  secondaryDepartmentIds?: string[];
-  consultationFee: number;
-  followUpFee: number;
-  status: 'Available' | 'On Break' | 'Busy' | 'Offline';
-  availability: AvailabilitySlot[];
+  experience_years: number;
+  registration_number: string;
+  consultation_fee: number;
+  followup_fee: number;
+  departments: DepartmentInfo[];
+  created_at: string;
+  status?: 'Available' | 'On Break' | 'Busy' | 'Offline';
+  availability?: AvailabilitySlot[];
 }
 
 export interface AvailabilitySlot {
-  day: string;
-  startTime: string;
-  endTime: string;
-  duration: number; // in minutes
+  id: string;
+  doctor_id: string;
+  day_of_week: string;
+  start_time: string;
+  end_time: string;
+  consultation_duration: number;
+  is_leave: boolean;
 }
 
 export interface Patient {

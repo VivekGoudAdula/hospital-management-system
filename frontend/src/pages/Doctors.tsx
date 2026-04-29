@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Users, 
@@ -15,7 +15,8 @@ import {
   Mail,
   Phone,
   ArrowUpRight,
-  ChevronDown
+  ChevronDown,
+  Trash2
 } from 'lucide-react';
 import { 
   Card, 
@@ -65,24 +66,124 @@ import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const Doctors = () => {
-  const { doctors, departments, addDoctor } = useHospitalStore();
+  const { 
+    doctors, 
+    departments, 
+    fetchDoctors, 
+    fetchDepartments, 
+    addDoctor, 
+    deleteDoctor,
+    fetchAvailability,
+    addAvailability,
+    deleteAvailability
+  } = useHospitalStore();
+  
   const [searchTerm, setSearchTerm] = useState('');
   const [deptFilter, setDeptFilter] = useState('all');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [viewingDoctor, setViewingDoctor] = useState<any>(null);
+  const [availabilitySlots, setAvailabilitySlots] = useState<any[]>([]);
+
+  // Form State
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    password: '',
+    specialization: '',
+    sub_specialization: '',
+    qualifications: '',
+    experience_years: 0,
+    registration_number: '',
+    consultation_fee: 0,
+    followup_fee: 0,
+    primary_department_id: '',
+    secondary_department_ids: [] as string[]
+  });
+
+  // Availability Form State
+  const [availForm, setAvailForm] = useState({
+    day_of_week: 'Monday',
+    start_time: '09:00',
+    end_time: '13:00',
+    consultation_duration: 15,
+    is_leave: false
+  });
+
+  useEffect(() => {
+    fetchDoctors();
+    fetchDepartments();
+  }, []);
+
+  useEffect(() => {
+    if (viewingDoctor && viewingDoctor.activeTab === 'schedule') {
+      loadAvailability(viewingDoctor.id);
+    }
+  }, [viewingDoctor]);
+
+  const loadAvailability = async (doctorId: string) => {
+    const slots = await fetchAvailability(doctorId);
+    setAvailabilitySlots(slots);
+  };
+
+  const handleAddDoctor = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const payload = {
+        ...formData,
+        qualifications: formData.qualifications.split(',').map(q => q.trim()).filter(q => q),
+        experience_years: Number(formData.experience_years),
+        consultation_fee: Number(formData.consultation_fee),
+        followup_fee: Number(formData.followup_fee)
+      };
+      
+      await addDoctor(payload);
+      toast.success('Medical professional added to the registry');
+      setIsDialogOpen(false);
+      // Reset form
+      setFormData({
+        name: '', email: '', password: '', specialization: '', sub_specialization: '',
+        qualifications: '', experience_years: 0, registration_number: '',
+        consultation_fee: 0, followup_fee: 0, primary_department_id: '',
+        secondary_department_ids: []
+      });
+    } catch (error: any) {
+      toast.error(error.message || 'Verification sequence failed.');
+    }
+  };
+
+  const handleDeleteDoctor = async (id: string) => {
+    if (confirm('Are you sure you want to decommission this professional account?')) {
+      await deleteDoctor(id);
+      toast.success('Professional account decommissioned.');
+    }
+  };
+
+  const handleAddAvailability = async () => {
+    try {
+      await addAvailability(viewingDoctor.id, availForm);
+      toast.success('Availability matrix updated.');
+      loadAvailability(viewingDoctor.id);
+    } catch (error: any) {
+      toast.error(error.message || 'Sync failed.');
+    }
+  };
+
+  const handleDeleteSlot = async (slotId: string) => {
+    try {
+      await deleteAvailability(slotId);
+      toast.success('Slot removed from matrix.');
+      loadAvailability(viewingDoctor.id);
+    } catch (error: any) {
+      toast.error(error.message || 'Deletion failed.');
+    }
+  };
 
   const filteredDoctors = doctors.filter(doctor => {
     const matchesSearch = doctor.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                          doctor.specialization.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesDept = deptFilter === 'all' || doctor.primaryDepartmentId === deptFilter;
+    const matchesDept = deptFilter === 'all' || doctor.departments.some(d => d.id === deptFilter);
     return matchesSearch && matchesDept;
   });
-
-  const handleAddDoctor = (e: React.FormEvent) => {
-    e.preventDefault();
-    toast.success('Medical professional added to the registry');
-    setIsDialogOpen(false);
-  };
 
   return (
     <motion.div 
@@ -102,12 +203,12 @@ const Doctors = () => {
 
         <div className="flex items-center gap-4">
            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-              <DialogTrigger render={
+              <DialogTrigger asChild>
                 <Button size="lg" className="rounded-2xl bg-indigo-600 text-white shadow-xl shadow-indigo-100 gap-3 h-12 px-6 group">
                   <Plus className="h-5 w-5 bg-white/20 rounded-lg p-1" />
                   <span className="font-bold text-xs uppercase tracking-widest">Register Professional</span>
                 </Button>
-              } />
+              </DialogTrigger>
               <DialogContent className="sm:max-w-2xl rounded-[2.5rem] overflow-hidden p-0 border-none shadow-2xl max-h-[85vh] flex flex-col">
                 <DialogHeader className="p-10 bg-gradient-to-br from-indigo-600 to-indigo-700 text-white relative shrink-0">
                   <div className="absolute top-0 right-0 p-8 opacity-10 blur-xl">
@@ -118,23 +219,32 @@ const Doctors = () => {
                     Initialize a new faculty account in the ApexCare medical registry.
                   </DialogDescription>
                 </DialogHeader>
-                <form onSubmit={handleAddDoctor} className="px-10 pb-10 pt-8 space-y-8 overflow-y-auto flex-1 bg-white scrollbar-hide">
+                <form id="add-doctor-form" onSubmit={handleAddDoctor} className="px-10 pb-10 pt-8 space-y-8 overflow-y-auto flex-1 bg-white scrollbar-hide">
                   <Tabs defaultValue="profile" className="w-full">
                     <TabsList className="grid w-full grid-cols-3 rounded-2xl p-1 mb-10 bg-slate-50 border border-slate-100">
                       <TabsTrigger value="profile" className="rounded-xl text-[10px] font-bold uppercase tracking-widest py-3">Profile Meta</TabsTrigger>
                       <TabsTrigger value="account" className="rounded-xl text-[10px] font-bold uppercase tracking-widest py-3">Account Protocol</TabsTrigger>
-                      <TabsTrigger value="schedule" className="rounded-xl text-[10px] font-bold uppercase tracking-widest py-3">Shift Plan</TabsTrigger>
+                      <TabsTrigger value="logistics" className="rounded-xl text-[10px] font-bold uppercase tracking-widest py-3">Logistics</TabsTrigger>
                     </TabsList>
                     
                     <TabsContent value="profile" className="space-y-6">
                       <div className="grid grid-cols-2 gap-8">
                         <div className="grid gap-3">
                           <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Entity Full Name</Label>
-                          <Input placeholder="Dr. John Doe" className="h-12 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all font-medium" />
+                          <Input 
+                            value={formData.name}
+                            onChange={e => setFormData({...formData, name: e.target.value})}
+                            placeholder="Dr. John Doe" 
+                            className="h-12 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all font-medium" 
+                            required
+                          />
                         </div>
                         <div className="grid gap-3">
-                          <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Department Allocation</Label>
-                          <Select>
+                          <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Primary Department</Label>
+                          <Select 
+                            value={formData.primary_department_id}
+                            onValueChange={v => setFormData({...formData, primary_department_id: v})}
+                          >
                             <SelectTrigger className="h-12 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all font-medium">
                               <SelectValue placeholder="Specify Unit" />
                             </SelectTrigger>
@@ -146,23 +256,34 @@ const Doctors = () => {
                       </div>
                       <div className="grid grid-cols-2 gap-8">
                         <div className="grid gap-3">
-                          <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Legacy Specialization</Label>
-                          <Input placeholder="Cardiology" className="h-12 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all font-medium" />
+                          <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Specialization</Label>
+                          <Input 
+                            value={formData.specialization}
+                            onChange={e => setFormData({...formData, specialization: e.target.value})}
+                            placeholder="Cardiology" 
+                            className="h-12 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all font-medium" 
+                            required
+                          />
                         </div>
                         <div className="grid gap-3">
-                          <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Verified License UID</Label>
-                          <Input placeholder="MED-YYYYY" className="h-12 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all font-medium" />
+                          <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">License UID</Label>
+                          <Input 
+                            value={formData.registration_number}
+                            onChange={e => setFormData({...formData, registration_number: e.target.value})}
+                            placeholder="MED-12345" 
+                            className="h-12 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all font-medium" 
+                            required
+                          />
                         </div>
                       </div>
-                      <div className="grid grid-cols-2 gap-8">
-                        <div className="grid gap-3">
-                          <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Years Clinical Exp.</Label>
-                          <Input type="number" className="h-12 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all font-medium" />
-                        </div>
-                        <div className="grid gap-3">
-                          <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Consultation Fee Base</Label>
-                          <Input type="number" className="h-12 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all font-medium" />
-                        </div>
+                      <div className="grid gap-3">
+                        <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Qualifications (Comma separated)</Label>
+                        <Input 
+                          value={formData.qualifications}
+                          onChange={e => setFormData({...formData, qualifications: e.target.value})}
+                          placeholder="MBBS, MD, PhD" 
+                          className="h-12 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all font-medium" 
+                        />
                       </div>
                     </TabsContent>
                     
@@ -170,7 +291,7 @@ const Doctors = () => {
                       <div className="p-6 bg-indigo-50/50 rounded-3xl border border-indigo-100/50 mb-4 flex gap-4">
                         <Mail className="h-6 w-6 text-indigo-400 shrink-0" />
                         <p className="text-xs text-indigo-600 font-medium leading-relaxed italic">
-                          Synchronizing these credentials will link the professional to the ApexCare Cloud Infrastructure and enable autonomous workstation login.
+                          Synchronizing these credentials will link the professional to the ApexCare Cloud Infrastructure.
                         </p>
                       </div>
                       <div className="grid gap-6">
@@ -178,31 +299,68 @@ const Doctors = () => {
                           <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Institutional Email Relay</Label>
                           <div className="relative">
                             <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                            <Input type="email" placeholder="faculty.member@apexcare.com" className="h-12 rounded-2xl pl-11 bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all font-medium" required />
+                            <Input 
+                              type="email" 
+                              value={formData.email}
+                              onChange={e => setFormData({...formData, email: e.target.value})}
+                              placeholder="faculty.member@apexcare.com" 
+                              className="h-12 rounded-2xl pl-11 bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all font-medium" 
+                              required 
+                            />
                           </div>
                         </div>
                         <div className="grid gap-3">
                           <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Initial Security Access Key</Label>
-                          <Input type="password" placeholder="••••••••" className="h-12 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all font-medium" required />
-                          <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest ml-1">Security Standard: 8+ Length • Alphanumeric Required</p>
+                          <Input 
+                            type="password" 
+                            value={formData.password}
+                            onChange={e => setFormData({...formData, password: e.target.value})}
+                            placeholder="••••••••" 
+                            className="h-12 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all font-medium" 
+                            required 
+                          />
                         </div>
                       </div>
                     </TabsContent>
                     
-                    <TabsContent value="schedule" className="space-y-6">
-                      <div className="p-8 bg-slate-50 rounded-[2rem] border border-slate-100 text-center space-y-6">
-                        <div>
-                          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Shift Sync Module Integration</p>
-                          <p className="text-sm text-slate-600 font-medium mt-1 italic">Define recurring availability cycle below.</p>
+                    <TabsContent value="logistics" className="space-y-6">
+                      <div className="grid grid-cols-2 gap-8">
+                        <div className="grid gap-3">
+                          <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Years Exp.</Label>
+                          <Input 
+                            type="number" 
+                            value={formData.experience_years}
+                            onChange={e => setFormData({...formData, experience_years: parseInt(e.target.value)})}
+                            className="h-12 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all font-medium" 
+                          />
                         </div>
-                        <div className="grid grid-cols-7 gap-3">
-                          {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, i) => (
-                            <div key={i} className="flex flex-col gap-3">
-                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{day}</span>
-                              <div className={`h-14 rounded-2xl border flex items-center justify-center cursor-pointer transition-all ${i < 5 ? 'bg-indigo-600 text-white border-transparent shadow-lg shadow-indigo-100' : 'bg-white border-slate-200 text-slate-300'}`}>
-                                {i < 5 && <CheckCircle2 className="h-5 w-5" />}
-                              </div>
-                            </div>
+                        <div className="grid gap-3">
+                          <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Consult Fee ($)</Label>
+                          <Input 
+                            type="number" 
+                            value={formData.consultation_fee}
+                            onChange={e => setFormData({...formData, consultation_fee: parseFloat(e.target.value)})}
+                            className="h-12 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all font-medium" 
+                          />
+                        </div>
+                      </div>
+                      <div className="grid gap-3">
+                        <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Secondary Departments</Label>
+                        <div className="flex flex-wrap gap-2 p-4 bg-slate-50 rounded-2xl">
+                          {departments.filter(d => d.id !== formData.primary_department_id).map(d => (
+                            <Badge 
+                              key={d.id} 
+                              variant={formData.secondary_department_ids.includes(d.id) ? "default" : "outline"}
+                              className="cursor-pointer rounded-lg px-3 py-1.5"
+                              onClick={() => {
+                                const ids = formData.secondary_department_ids.includes(d.id)
+                                  ? formData.secondary_department_ids.filter(id => id !== d.id)
+                                  : [...formData.secondary_department_ids, d.id];
+                                setFormData({...formData, secondary_department_ids: ids});
+                              }}
+                            >
+                              {d.name}
+                            </Badge>
                           ))}
                         </div>
                       </div>
@@ -211,7 +369,7 @@ const Doctors = () => {
                 </form>
                 <div className="p-10 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
                   <Button variant="ghost" className="rounded-2xl h-14 px-8 text-slate-400 font-bold uppercase tracking-widest text-xs hover:bg-white" onClick={() => setIsDialogOpen(false)}>Cancel Registry</Button>
-                  <Button type="submit" className="rounded-2xl h-14 px-12 bg-indigo-600 text-white font-bold text-sm uppercase tracking-widest shadow-xl shadow-indigo-100 group" onClick={handleAddDoctor}>
+                  <Button form="add-doctor-form" type="submit" className="rounded-2xl h-14 px-12 bg-indigo-600 text-white font-bold text-sm uppercase tracking-widest shadow-xl shadow-indigo-100 group">
                     Deploy Professional Account <ArrowUpRight className="h-4 w-4 ml-2 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                   </Button>
                 </div>
@@ -265,13 +423,23 @@ const Doctors = () => {
                         {doctor.name.split(' ').map(n => n[0]).join('')}
                       </AvatarFallback>
                     </Avatar>
-                    <Badge className={cn("rounded-full border-none px-3 py-1 text-[8px] font-bold uppercase shadow-sm", 
-                      doctor.status === 'Available' ? 'bg-emerald-50 text-emerald-700' :
-                      doctor.status === 'Busy' ? 'bg-amber-50 text-amber-700' :
-                      'bg-slate-50 text-slate-500'
-                    )}>
-                      {doctor.status}
-                    </Badge>
+                    <div className="flex gap-2">
+                      <Badge className={cn("rounded-full border-none px-3 py-1 text-[8px] font-bold uppercase shadow-sm", 
+                        doctor.status === 'Available' ? 'bg-emerald-50 text-emerald-700' :
+                        doctor.status === 'Busy' ? 'bg-amber-50 text-amber-700' :
+                        'bg-slate-50 text-slate-500'
+                      )}>
+                        {doctor.status}
+                      </Badge>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-6 w-6 rounded-full text-slate-300 hover:text-red-500 hover:bg-red-50"
+                        onClick={() => handleDeleteDoctor(doctor.id)}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
                   </div>
                   <div className="pt-6 space-y-1">
                     <h3 className="text-xl font-bold text-slate-900 leading-tight tracking-tight group-hover:text-indigo-600 transition-colors">{doctor.name}</h3>
@@ -284,23 +452,23 @@ const Doctors = () => {
                 <div className="p-6 space-y-6 flex-1 flex flex-col">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="p-4 bg-slate-50/50 rounded-2xl border border-slate-100 transition-colors group-hover:bg-white group-hover:border-indigo-100">
-                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1.5">Legacy Experience</p>
-                      <p className="text-sm font-bold text-slate-800 leading-none tracking-tight">{doctor.experience}+ Years</p>
+                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1.5">Exp.</p>
+                      <p className="text-sm font-bold text-slate-800 leading-none tracking-tight">{doctor.experience_years}+ Years</p>
                     </div>
                     <div className="p-4 bg-slate-50/50 rounded-2xl border border-slate-100 transition-colors group-hover:bg-white group-hover:border-indigo-100">
                       <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1.5">Consult Fee</p>
-                      <p className="text-sm font-bold text-slate-800 leading-none tracking-tight">${doctor.consultationFee}</p>
+                      <p className="text-sm font-bold text-slate-800 leading-none tracking-tight">${doctor.consultation_fee}</p>
                     </div>
                   </div>
                   
                   <div className="space-y-2 pt-2 border-t border-slate-50 flex-1">
                     <div className="flex items-center gap-3 text-xs font-medium text-slate-500 group-hover:text-slate-900 transition-colors truncate">
                       <Mail className="h-4 w-4 text-slate-300 group-hover:text-indigo-400" />
-                      <span>{doctor.name.toLowerCase().replace('. ', '.').replace(' ', '_')}@apexcare.com</span>
+                      <span>{doctor.email}</span>
                     </div>
                     <div className="flex items-center gap-3 text-xs font-medium text-slate-500 group-hover:text-slate-900 transition-colors">
                       <Phone className="h-4 w-4 text-slate-300 group-hover:text-indigo-400" />
-                      <span>+1 (555) 900-X{index}Y</span>
+                      <span>{doctor.registration_number}</span>
                     </div>
                   </div>
 
@@ -342,7 +510,7 @@ const Doctors = () => {
 
       {/* Doctor Detail Viewer */}
       <Dialog open={!!viewingDoctor} onOpenChange={() => setViewingDoctor(null)}>
-        <DialogContent className="sm:max-w-3xl rounded-[2.5rem] overflow-hidden p-0 border-none shadow-2xl max-h-[85vh] flex flex-col bg-white">
+        <DialogContent className="sm:max-w-4xl rounded-[2.5rem] overflow-hidden p-0 border-none shadow-2xl max-h-[90vh] flex flex-col bg-white">
           <DialogHeader className="p-10 bg-slate-50 border-b border-slate-100 shrink-0">
              <div className="flex items-center gap-8">
                 <div className="relative group">
@@ -363,7 +531,7 @@ const Doctors = () => {
                    </div>
                    <DialogDescription className="text-indigo-600 font-bold flex items-center gap-2 text-sm uppercase tracking-widest opacity-80 italic">
                       <Stethoscope className="h-4 w-4" />
-                      {viewingDoctor?.specialization} Specialist • Clinical Lead
+                      {viewingDoctor?.specialization} Specialist • {viewingDoctor?.sub_specialization || 'Clinical Lead'}
                    </DialogDescription>
                 </div>
              </div>
@@ -384,15 +552,15 @@ const Doctors = () => {
                    <div className="grid grid-cols-3 gap-6">
                       <div className="p-6 bg-slate-50 rounded-[2rem] border border-slate-100 flex flex-col gap-1 items-center justify-center group hover:bg-white hover:border-indigo-100 transition-all">
                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-1">Clinic Tenure</p>
-                         <p className="text-3xl font-bold text-slate-900 leading-none group-hover:text-indigo-600 transition-colors">{viewingDoctor?.experience}+ <span className="text-xs uppercase tracking-tighter opacity-50">Yrs</span></p>
+                         <p className="text-3xl font-bold text-slate-900 leading-none group-hover:text-indigo-600 transition-colors">{viewingDoctor?.experience_years}+ <span className="text-xs uppercase tracking-tighter opacity-50">Yrs</span></p>
                       </div>
                       <div className="p-6 bg-slate-50 rounded-[2rem] border border-slate-100 flex flex-col gap-1 items-center justify-center group hover:bg-white hover:border-indigo-100 transition-all">
                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-1">Base Consultation</p>
-                         <p className="text-3xl font-bold text-slate-900 leading-none group-hover:text-indigo-600 transition-colors"><span className="text-xs opacity-50">$</span>{viewingDoctor?.consultationFee}</p>
+                         <p className="text-3xl font-bold text-slate-900 leading-none group-hover:text-indigo-600 transition-colors"><span className="text-xs opacity-50">$</span>{viewingDoctor?.consultation_fee}</p>
                       </div>
                       <div className="p-6 bg-slate-50 rounded-[2rem] border border-slate-100 flex flex-col gap-1 items-center justify-center group hover:bg-white hover:border-indigo-100 transition-all">
-                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-1">Clinical Success</p>
-                         <p className="text-3xl font-bold text-slate-900 leading-none group-hover:text-indigo-600 transition-colors">98.4<span className="text-xs opacity-50 font-bold">%</span></p>
+                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-1">Followup Fee</p>
+                         <p className="text-3xl font-bold text-slate-900 leading-none group-hover:text-indigo-600 transition-colors"><span className="text-xs opacity-50">$</span>{viewingDoctor?.followup_fee}</p>
                       </div>
                    </div>
 
@@ -403,52 +571,84 @@ const Doctors = () => {
                         <div className="h-px bg-slate-100 flex-1" />
                       </div>
                       <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-                         {['MD Oncology Master', 'Board Certified specialist', 'PhD Molecular Bio-Sci', 'Lead Member AFMR', 'Diagnostics Expert'].map((q, i) => (
+                         {viewingDoctor?.qualifications.map((q: string, i: number) => (
                             <div key={i} className="px-5 py-2.5 bg-white border border-slate-100 text-slate-600 text-xs font-bold uppercase tracking-widest rounded-2xl shadow-sm hover:border-indigo-100 hover:text-indigo-600 cursor-default transition-all">{q}</div>
                          ))}
                       </div>
                    </div>
 
                    <div className="p-8 bg-indigo-50/30 rounded-[2.5rem] border border-indigo-100 relative group overflow-hidden">
-                      <div className="absolute -top-10 -right-10 opacity-5 group-hover:scale-110 transition-transform duration-700">
-                         <FileText className="h-40 w-40" />
-                      </div>
                       <h4 className="text-xs font-bold text-indigo-600 uppercase tracking-[0.2em] mb-3 flex items-center gap-2">
                          <div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse" />
-                         Professional Executive Summary
+                         Allocated Departments
                       </h4>
-                      <p className="text-sm text-slate-600 leading-relaxed italic font-medium relative z-10 transition-colors group-hover:text-slate-900">
-                         "Specializing in highly complex {viewingDoctor?.specialization} archetypes with a distinguished focus on comprehensive patient wellness and proprietary diagnostic protocols. Managed over 1,200 successful clinical outcome synchronization cycles in the current reporting period."
-                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {viewingDoctor?.departments.map((d: any) => (
+                          <Badge key={d.id} className={cn("px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest", d.is_primary ? "bg-indigo-600 text-white" : "bg-white border-slate-200 text-slate-600")}>
+                            {d.name} {d.is_primary && "(Primary)"}
+                          </Badge>
+                        ))}
+                      </div>
                    </div>
                 </TabsContent>
 
                 <TabsContent value="schedule" className="m-0 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                   <div className="grid grid-cols-7 gap-3">
-                       {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, i) => (
-                          <div key={i} className={cn("p-5 rounded-[1.5rem] border flex flex-col items-center gap-3 transition-all", i < 5 ? "bg-emerald-50 border-emerald-100 text-emerald-700 shadow-md shadow-emerald-100/50" : "bg-slate-50 border-slate-100 text-slate-300")}>
-                             <span className="text-[10px] font-bold uppercase tracking-widest">{day}</span>
-                             {i < 5 ? (
-                                <div className="h-6 w-6 bg-emerald-500 rounded-full flex items-center justify-center shadow-[0_0_10px_rgba(16,185,129,0.4)]">
-                                   <div className="h-2 w-2 bg-white rounded-full animate-pulse" />
-                                </div>
-                             ) : (
-                                <Clock className="h-5 w-5 opacity-40" />
-                             )}
-                          </div>
-                       ))}
-                   </div>
-                   <div className="p-8 bg-indigo-600 rounded-[2.5rem] border-none shadow-xl shadow-indigo-100 text-white flex items-center justify-between group">
-                      <div className="flex items-center gap-5">
-                         <div className="h-14 w-14 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center border border-white/20 shadow-lg transition-transform group-hover:scale-110">
-                            <Calendar className="h-7 w-7 text-white" />
-                         </div>
-                         <div className="space-y-1">
-                            <p className="text-xl font-bold tracking-tight">Institutional Shift Sequence</p>
-                            <p className="text-xs text-indigo-100/80 font-bold uppercase tracking-widest">Active Cycle: 09:00 AM — 06:00 PM EST (Standard Duty Phase)</p>
-                         </div>
+                   <div className="bg-slate-50 p-8 rounded-[2.5rem] border border-slate-100 space-y-8">
+                      <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.3em] text-center">Update Availability Matrix</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div className="space-y-2">
+                          <Label className="text-[9px] font-bold uppercase text-slate-400 ml-1">Day</Label>
+                          <Select value={availForm.day_of_week} onValueChange={v => setAvailForm({...availForm, day_of_week: v})}>
+                            <SelectTrigger className="h-11 rounded-xl bg-white border-transparent shadow-sm font-bold text-[10px] uppercase">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-xl p-2">
+                              {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(d => <SelectItem key={d} value={d} className="rounded-lg">{d}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-[9px] font-bold uppercase text-slate-400 ml-1">Start Phase</Label>
+                          <Input type="time" value={availForm.start_time} onChange={e => setAvailForm({...availForm, start_time: e.target.value})} className="h-11 rounded-xl border-transparent bg-white shadow-sm font-bold text-xs" />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-[9px] font-bold uppercase text-slate-400 ml-1">End Phase</Label>
+                          <Input type="time" value={availForm.end_time} onChange={e => setAvailForm({...availForm, end_time: e.target.value})} className="h-11 rounded-xl border-transparent bg-white shadow-sm font-bold text-xs" />
+                        </div>
+                        <div className="flex items-end">
+                          <Button onClick={handleAddAvailability} className="w-full h-11 rounded-xl bg-indigo-600 text-white font-bold uppercase tracking-widest text-[10px] shadow-lg shadow-indigo-100">Inject Slot</Button>
+                        </div>
                       </div>
-                      <Button className="rounded-2xl bg-white text-indigo-600 hover:bg-indigo-50 font-bold px-6 h-12 shadow-lg shadow-black/5">Modify Matrix</Button>
+                   </div>
+
+                   <div className="space-y-4">
+                     <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.3em] ml-1">Active Availability Slots</h4>
+                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                       {availabilitySlots.map((slot) => (
+                         <div key={slot.id} className="p-5 bg-white rounded-2xl border border-slate-100 flex items-center justify-between group hover:border-indigo-100 transition-all">
+                           <div className="flex items-center gap-4">
+                             <div className="h-10 w-10 bg-indigo-50 rounded-xl flex items-center justify-center">
+                               <Clock className="h-5 w-5 text-indigo-500" />
+                             </div>
+                             <div>
+                               <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">{slot.day_of_week}</p>
+                               <p className="text-sm font-bold text-slate-800 tracking-tight">{slot.start_time} — {slot.end_time}</p>
+                             </div>
+                           </div>
+                           <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={() => handleDeleteSlot(slot.id)}
+                           >
+                             <Trash2 className="h-4 w-4" />
+                           </Button>
+                         </div>
+                       ))}
+                       {availabilitySlots.length === 0 && (
+                         <div className="col-span-full py-10 text-center text-slate-400 italic text-sm">No active shift slots detected.</div>
+                       )}
+                     </div>
                    </div>
                 </TabsContent>
              </Tabs>
