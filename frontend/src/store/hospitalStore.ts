@@ -62,7 +62,12 @@ interface HospitalState {
   updatePatientStatus: (id: string, status: string) => Promise<void>;
   
   // Document Actions
-  fetchPatientDocuments: (patientId: string) => Promise<void>;
+  documentRepository: {
+    data: any[];
+    total: number;
+  };
+  fetchDocumentRepository: (filters?: { search?: string, file_type?: string, start_date?: string, end_date?: string }) => Promise<void>;
+  fetchPatientDocuments: (patientId: string) => Promise<any[]>;
   fetchAllDocuments: () => Promise<void>;
   uploadDocument: (formData: FormData) => Promise<void>;
   deleteDocument: (id: string) => Promise<void>;
@@ -76,6 +81,7 @@ export const useHospitalStore = create<HospitalState>((set, get) => ({
   doctors: [],
   patients: [],
   documents: [],
+  documentRepository: { data: [], total: 0 },
   notes: initialNotes,
   isLoading: false,
   stats: null,
@@ -399,10 +405,31 @@ export const useHospitalStore = create<HospitalState>((set, get) => ({
     }
   },
 
+  fetchDocumentRepository: async (filters = {}) => {
+    const token = localStorage.getItem('token');
+    try {
+      const params = new URLSearchParams();
+      if (filters.search) params.append('search', filters.search);
+      if (filters.file_type && filters.file_type !== 'all') params.append('file_type', filters.file_type);
+      if (filters.start_date) params.append('start_date', filters.start_date);
+      if (filters.end_date) params.append('end_date', filters.end_date);
+      
+      const response = await fetch(`${API_URL}/documents/repository?${params.toString()}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        set({ documentRepository: data });
+      }
+    } catch (error) {
+      console.error('Fetch document repository error:', error);
+    }
+  },
+
   fetchPatientDocuments: async (patientId) => {
     const token = localStorage.getItem('token');
     try {
-      const response = await fetch(`${API_URL}/documents?patient_id=${patientId}`, {
+      const response = await fetch(`${API_URL}/documents/patient/${patientId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
@@ -418,33 +445,23 @@ export const useHospitalStore = create<HospitalState>((set, get) => ({
           uploadedBy: d.uploaded_by
         }));
         set({ documents: mappedDocs });
+        return mappedDocs;
       }
     } catch (error) {
-      console.error('Fetch documents error:', error);
+      console.error('Fetch patient documents error:', error);
     }
+    return [];
   },
 
   fetchAllDocuments: async () => {
     const token = localStorage.getItem('token');
     try {
-      const response = await fetch(`${API_URL}/documents`, {
+      const response = await fetch(`${API_URL}/documents/repository`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
         const data = await response.json();
-        const mappedDocs = data.map((d: any) => ({
-          id: d.id,
-          type: d.file_type,
-          patientId: d.patient_id,
-          fileUrl: `http://localhost:8000${d.file_url}`,
-          fileName: d.file_name,
-          notes: d.notes,
-          uploadDate: d.created_at,
-          uploadedBy: d.uploaded_by,
-          patientName: d.patient_name,
-          patientMrn: d.patient_mrn
-        }));
-        set({ documents: mappedDocs });
+        set({ documentRepository: data });
       }
     } catch (error) {
       console.error('Fetch all documents error:', error);
@@ -460,6 +477,7 @@ export const useHospitalStore = create<HospitalState>((set, get) => ({
         body: formData,
       });
       if (response.ok) {
+        await get().fetchDocumentRepository();
         const patientId = formData.get('patient_id') as string;
         if (patientId) await get().fetchPatientDocuments(patientId);
       } else {
