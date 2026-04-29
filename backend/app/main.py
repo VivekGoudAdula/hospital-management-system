@@ -16,7 +16,8 @@ if not os.path.exists("uploads"):
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # CORS Setup
-origins = settings.ALLOWED_ORIGINS.split(",")
+# Strip spaces and any quotes that might come from env variables
+origins = [o.strip().replace('"', '').replace("'", "") for o in settings.ALLOWED_ORIGINS.split(",")]
 
 app.add_middleware(
     CORSMiddleware,
