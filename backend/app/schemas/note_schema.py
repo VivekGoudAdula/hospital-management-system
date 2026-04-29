@@ -5,14 +5,15 @@ from typing import Optional
 class NoteBase(BaseModel):
     content: str
     patient_id: str
-    author_name: str
-    author_role: str = "Medical Staff"
+    document_id: Optional[str] = None
+    note_type: str = "general"
 
 class NoteCreate(NoteBase):
     pass
 
 class NoteResponse(NoteBase):
     id: str
+    doctor_id: str
     created_at: datetime
 
     class Config:

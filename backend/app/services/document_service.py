@@ -1,3 +1,4 @@
+import os
 from datetime import datetime
 from typing import List, Dict, Any
 from bson import ObjectId
@@ -51,7 +52,13 @@ class DocumentService:
             doc["patient_id"] = str(doc["patient_id"])
             doc["uploaded_by"] = str(doc["uploaded_by"])
             del doc["_id"]
-            
+
+            # Normalize file_url — handle legacy absolute paths stored by old buggy code.
+            # Always serve as /uploads/{filename} regardless of what is in the DB.
+            raw_url = doc.get("file_url", "")
+            filename = os.path.basename(raw_url.replace("\\", "/"))
+            doc["file_url"] = f"/uploads/{filename}" if filename else raw_url
+
         return documents
 
     async def get_document_repository(self, search: str = None, file_type: str = None, start_date: str = None, end_date: str = None) -> Dict[str, Any]:

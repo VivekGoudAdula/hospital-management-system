@@ -4,16 +4,19 @@ from fastapi.staticfiles import StaticFiles
 import os
 from .config.db import connect_to_mongo, close_mongo_connection
 from .config.settings import settings
-from .routes import auth_routes, department_routes, doctor_routes, patient_routes, document_routes, stats_routes, note_routes
+from .routes import auth_routes, department_routes, doctor_routes, patient_routes, document_routes, stats_routes, notes_routes, doctor_dashboard_routes
 
 app = FastAPI(title="ApexCare Backend")
 
 # Ensure uploads directory exists
-if not os.path.exists("uploads"):
-    os.makedirs("uploads")
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+uploads_dir = os.path.join(BASE_DIR, "uploads")
+
+if not os.path.exists(uploads_dir):
+    os.makedirs(uploads_dir)
 
 # Mount Static Files
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 
 # CORS Setup
 # Strip spaces and any quotes that might come from env variables
@@ -42,7 +45,8 @@ app.include_router(doctor_routes.router, prefix="/api")
 app.include_router(patient_routes.router, prefix="/api")
 app.include_router(document_routes.router, prefix="/api")
 app.include_router(stats_routes.router, prefix="/api")
-app.include_router(note_routes.router, prefix="/api")
+app.include_router(notes_routes.router, prefix="/api")
+app.include_router(doctor_dashboard_routes.router, prefix="/api")
 
 @app.get("/")
 async def root():

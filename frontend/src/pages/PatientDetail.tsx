@@ -683,6 +683,9 @@ const PatientDetail = () => {
       {/* Document Detail Viewer - Redesigned to match reference */}
       <Dialog open={!!selectedDoc} onOpenChange={() => setSelectedDoc(null)}>
         <DialogContent className="sm:max-w-[95vw] md:max-w-[1400px] h-[90vh] rounded-[2.5rem] p-0 border-none shadow-2xl flex flex-col overflow-hidden bg-[#F8FAFC]">
+          {/* Visually hidden title/description for screen reader accessibility */}
+          <DialogTitle className="sr-only">Clinical Diagnostic Workspace</DialogTitle>
+          <DialogDescription className="sr-only">View and manage patient clinical documents</DialogDescription>
           {/* Main Header */}
           <div className="h-20 bg-white border-b border-slate-100 flex items-center justify-between px-10 shrink-0">
              <div className="flex items-center gap-4">
@@ -806,22 +809,14 @@ const PatientDetail = () => {
                   </div>
                </div>
 
-               {/* Related Documents Section */}
+               {/* All Documents Section */}
                <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-8 flex flex-col shrink-0">
-                  <div className="flex items-center justify-between mb-6">
-                     <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Related Archives</h3>
-                     <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-300"><History className="h-3.5 w-3.5" /></Button>
+                  <div className="flex items-center justify-between mb-5">
+                     <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">All Documents</h3>
+                     <span className="text-[9px] font-bold text-slate-300 uppercase tracking-widest">{patientDocs.length} files</span>
                   </div>
 
-                  <div className="relative mb-6">
-                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-                     <Input 
-                       placeholder="Explorer search..." 
-                       className="pl-9 h-10 rounded-xl border-slate-100 bg-slate-50/50 text-xs font-medium placeholder:text-slate-400 focus-visible:ring-indigo-600/10"
-                     />
-                  </div>
-
-                  <div className="space-y-3">
+                  <div className="space-y-2 max-h-[280px] overflow-y-auto pr-1 scrollbar-hide">
                      {patientDocs.map((doc) => (
                         <div 
                           key={doc.id} 
@@ -831,14 +826,22 @@ const PatientDetail = () => {
                           )}
                           onClick={() => setSelectedDoc(doc)}
                         >
-                           <div className="h-9 w-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 group-hover:bg-white transition-colors">
-                              <FileText className="h-4.5 w-4.5" />
+                           <div className={cn(
+                              "h-9 w-9 rounded-xl flex items-center justify-center border shrink-0",
+                              doc.id === selectedDoc?.id
+                                ? "bg-indigo-600 border-indigo-600 text-white"
+                                : "bg-slate-100 border-slate-100 text-slate-400 group-hover:bg-white group-hover:text-indigo-600"
+                           )}>
+                              <FileText className="h-4 w-4" />
                            </div>
                            <div className="min-w-0 flex-1">
-                              <p className="text-[11px] font-bold text-slate-900 truncate">{doc.fileName}</p>
+                              <p className={cn("text-[11px] font-bold truncate", doc.id === selectedDoc?.id ? "text-indigo-700" : "text-slate-900")}>{doc.fileName}</p>
                               <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter mt-0.5">{doc.type} • {new Date(doc.uploadDate).toLocaleDateString()}</p>
                            </div>
-                           <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                           {doc.id === selectedDoc?.id && (
+                             <div className="h-2 w-2 rounded-full bg-indigo-500 shrink-0" />
+                           )}
+                           <div className={cn("flex gap-1 transition-opacity", doc.id === selectedDoc?.id ? "opacity-100" : "opacity-0 group-hover:opacity-100")}>
                               <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-lg"><Download className="h-3.5 w-3.5" /></Button>
                               <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-300 hover:text-rose-500 hover:bg-white rounded-lg" onClick={(e) => {e.stopPropagation(); deleteDocument(doc.id);}}><Trash2 className="h-3.5 w-3.5" /></Button>
                            </div>

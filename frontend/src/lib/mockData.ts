@@ -136,7 +136,7 @@ export const documents: Document[] = [
     patientMrn: 'MRN-1001',
     uploadDate: '2024-04-20',
     thumbnail: 'https://images.unsplash.com/photo-1530026405186-ed1f139313f8?w=200&h=150&fit=crop',
-    fileUrl: '#',
+    fileUrl: 'https://images.unsplash.com/photo-1530026405186-ed1f139313f8?w=1200&h=900&fit=crop',
     notes: 'Mild inflammation detected in the thoracic region.',
     filesCount: 3,
     latestActivity: 'Viewed 2h ago',

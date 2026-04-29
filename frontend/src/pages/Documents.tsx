@@ -427,6 +427,9 @@ const Documents = () => {
       {/* Detail Document Viewer - Clinical Diagnostic Workspace */}
       <Dialog open={!!selectedDoc} onOpenChange={() => setSelectedDoc(null)}>
         <DialogContent className="sm:max-w-[95vw] md:max-w-[1400px] h-[90vh] rounded-[2.5rem] p-0 border-none shadow-2xl flex flex-col overflow-hidden bg-[#F8FAFC]">
+          {/* Visually hidden title/description for screen reader accessibility */}
+          <DialogTitle className="sr-only">Clinical Diagnostic Workspace</DialogTitle>
+          <DialogDescription className="sr-only">View and manage patient clinical documents</DialogDescription>
           <div className="h-20 bg-white border-b border-slate-100 flex items-center justify-between px-10 shrink-0">
              <div className="flex items-center gap-4">
                 <div className="h-10 w-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-100">
@@ -512,35 +515,49 @@ const Documents = () => {
                   </div>
                </div>
 
-               {/* Related Archive Section */}
                <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-8 flex flex-col gap-4 shrink-0">
                   <div className="flex items-center gap-3">
                      <div className="h-5 w-5 rounded-full bg-indigo-50 flex items-center justify-center">
                         <History className="h-3 w-3 text-indigo-600" />
                      </div>
-                     <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Related Archive</h3>
+                     <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">All Documents</h3>
+                     <span className="ml-auto text-[9px] font-bold text-slate-300 uppercase tracking-widest">{patientDocuments.length} files</span>
                   </div>
-                  <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 scrollbar-hide">
-                    {patientDocuments.filter(d => d.id !== selectedDoc?.id).map(doc => (
-                      <div 
-                        key={doc.id} 
-                        className="flex items-center gap-4 p-3 rounded-2xl bg-slate-50 hover:bg-indigo-50 border border-slate-100 hover:border-indigo-100 transition-all cursor-pointer group"
+                  <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1 scrollbar-hide">
+                    {patientDocuments.map(doc => (
+                      <div
+                        key={doc.id}
+                        className={cn(
+                          "flex items-center gap-3 p-3 rounded-2xl border transition-all cursor-pointer group",
+                          doc.id === selectedDoc?.id
+                            ? "bg-indigo-50 border-indigo-200 shadow-sm"
+                            : "bg-slate-50 hover:bg-indigo-50 border-slate-100 hover:border-indigo-100"
+                        )}
                         onClick={() => setSelectedDoc(doc)}
                       >
-                         <div className="h-10 w-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 group-hover:text-indigo-600">
-                            <FileText className="h-5 w-5" />
+                         <div className={cn(
+                           "h-9 w-9 rounded-xl flex items-center justify-center border shrink-0",
+                           doc.id === selectedDoc?.id
+                             ? "bg-indigo-600 border-indigo-600 text-white"
+                             : "bg-white border-slate-100 text-slate-400 group-hover:text-indigo-600"
+                         )}>
+                            <FileText className="h-4 w-4" />
                          </div>
-                         <div className="min-w-0">
-                            <p className="text-[11px] font-bold text-slate-900 truncate">{doc.type}</p>
-                            <p className="text-[9px] text-slate-400 font-medium uppercase tracking-tighter">{new Date(doc.uploadDate).toLocaleDateString()}</p>
+                         <div className="min-w-0 flex-1">
+                            <p className={cn("text-[11px] font-bold truncate", doc.id === selectedDoc?.id ? "text-indigo-700" : "text-slate-900")}>{doc.type}</p>
+                            <p className="text-[9px] text-slate-400 font-medium uppercase tracking-tighter mt-0.5">{new Date(doc.uploadDate).toLocaleDateString()}</p>
                          </div>
+                         {doc.id === selectedDoc?.id && (
+                           <div className="h-2 w-2 rounded-full bg-indigo-500 shrink-0" />
+                         )}
                       </div>
                     ))}
-                    {patientDocuments.filter(d => d.id !== selectedDoc?.id).length === 0 && (
-                      <p className="text-[10px] text-slate-400 italic text-center py-4">No other documents found.</p>
+                    {patientDocuments.length === 0 && (
+                      <p className="text-[10px] text-slate-400 italic text-center py-4">No documents found.</p>
                     )}
                   </div>
                </div>
+
             </div>
           </div>
         </DialogContent>

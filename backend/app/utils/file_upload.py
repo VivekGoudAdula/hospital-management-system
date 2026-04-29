@@ -3,12 +3,14 @@ import uuid
 from fastapi import UploadFile, HTTPException, status
 from typing import List
 
-UPLOAD_DIR = "uploads"
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
 ALLOWED_EXTENSIONS = {"pdf", "jpg", "jpeg", "png"}
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
 
 if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
+
 
 async def save_upload_file(upload_file: UploadFile) -> str:
     """
@@ -48,16 +50,18 @@ async def save_upload_file(upload_file: UploadFile) -> str:
     finally:
         await upload_file.close()
     
-    # Return the relative URL/path
-    return f"/{UPLOAD_DIR}/{unique_filename}"
+    # Return a clean relative URL — always /uploads/{filename}, not the absolute disk path
+    return f"/uploads/{unique_filename}"
 
 def delete_local_file(file_url: str):
-    """Deletes a file from the local storage."""
-    # file_url is like /uploads/filename
-    if file_url.startswith("/"):
-        file_path = file_url[1:] # remove leading slash
-    else:
-        file_path = file_url
-        
+    """
+    Deletes a file from local storage.
+    file_url is expected to be a relative URL like /uploads/filename.jpg.
+    Reconstructs the absolute disk path using UPLOAD_DIR.
+    """
+    # Extract just the filename from the URL (e.g. /uploads/uuid_name.jpg -> uuid_name.jpg)
+    filename = os.path.basename(file_url)
+    file_path = os.path.join(UPLOAD_DIR, filename)
+
     if os.path.exists(file_path):
         os.remove(file_path)
