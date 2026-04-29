@@ -98,3 +98,21 @@ export interface Note {
   content: string;
   createdAt: string;
 }
+
+export interface MedicationItem {
+  name: string;
+  dosage: string;
+  frequency: string;
+  duration: string;
+  instructions: string;
+}
+
+export interface Prescription {
+  id: string;
+  patient_id: string;
+  doctor_id: string;
+  clinical_notes: string;
+  medications: MedicationItem[];
+  additional_notes: string;
+  created_at: string;
+}

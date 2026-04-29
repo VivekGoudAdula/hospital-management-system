@@ -61,31 +61,6 @@ const Navbar = () => {
       </div>
 
       <div className="flex items-center gap-6">
-        <div className="hidden lg:flex items-center space-x-2 bg-emerald-50 rounded-full px-4 py-1.5 text-[9px] font-bold uppercase tracking-widest text-emerald-600 border border-emerald-100/50">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]"></span>
-          <span>System Live</span>
-        </div>
-        
-        <div className="flex items-center gap-1">
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={toggleTheme}
-            className="text-slate-400 hover:text-slate-600 h-10 w-10 rounded-xl"
-          >
-            {theme === 'light' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
-          </Button>
-
-          <div className="relative">
-            <Button variant="ghost" size="icon" className="text-slate-400 hover:text-slate-600 h-10 w-10 rounded-xl">
-              <Bell className="h-5 w-5" />
-            </Button>
-            <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-destructive rounded-full border-2 border-white shadow-sm" />
-          </div>
-        </div>
-
-        <div className="h-6 w-[1px] bg-slate-200 mx-1" />
-
         <Button className="hidden md:flex bg-indigo-600 text-white hover:bg-indigo-700 h-11 px-6 rounded-2xl text-xs font-bold uppercase tracking-widest shadow-lg shadow-indigo-100 group transition-all active:scale-95">
           <span className="mr-2">+</span> Admission
         </Button>

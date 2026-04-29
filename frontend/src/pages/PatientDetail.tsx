@@ -94,8 +94,7 @@ const PatientDetail = () => {
   } = useHospitalStore();
   
   const [patient, setPatient] = useState<any>(null);
-  const [vitals, setVitals] = useState<any[]>([]); // Initialize empty as requested
-  const [prescriptions, setPrescriptions] = useState<any[]>([]); // Initialize empty as requested
+  const [vitals, setVitals] = useState<any[]>([]); 
   const [isNoteDialogOpen, setIsNoteDialogOpen] = useState(false);
   const [newNote, setNewNote] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -120,6 +119,8 @@ const PatientDetail = () => {
         await fetchPatientDocuments(id);
         await fetchDoctors();
         await fetchNotesByPatient(id);
+        await useHospitalStore.getState().fetchPatientPrescriptions(id);
+        await useHospitalStore.getState().fetchPatientTimeline(id);
       } catch (error) {
         console.error('Failed to load patient data:', error);
       } finally {
@@ -129,7 +130,29 @@ const PatientDetail = () => {
     loadData();
   }, [id]);
 
+  const { prescriptions, timeline } = useHospitalStore();
+
   const assignedDoctor = doctors.find(d => d.id === patient?.assignedDoctorId);
+
+  const combinedNotes = [
+    ...notes.filter(n => n.patientId === id).map(n => ({
+      id: n.id,
+      authorName: n.authorName,
+      content: n.content,
+      createdAt: n.createdAt,
+      type: 'note'
+    })),
+    ...prescriptions.filter(rx => rx.patient_id === id && rx.clinical_notes?.trim()).map(rx => {
+      const rxDoctor = doctors.find(d => d.id === rx.doctor_id);
+      return {
+        id: rx.id,
+        authorName: rxDoctor?.name || 'Doctor',
+        content: rx.clinical_notes,
+        createdAt: rx.created_at,
+        type: 'prescription'
+      };
+    })
+  ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   const handleStatusUpdate = async (newStatus: string) => {
     if (!id) return;
@@ -339,7 +362,7 @@ const PatientDetail = () => {
 
           <Card className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <CardHeader className="p-4 border-b border-slate-50 flex flex-row items-center justify-between">
-              <span className="text-[10px] font-bold uppercase text-slate-400 tracking-widest">Attending Staff</span>
+              <span className="text-[10px] font-bold uppercase text-slate-400 tracking-widest">Assigned Doctor</span>
               <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400"><Plus className="h-3 w-3" /></Button>
             </CardHeader>
             <CardContent className="p-4 space-y-4">
@@ -374,48 +397,24 @@ const PatientDetail = () => {
                       <CardTitle className="text-base font-bold text-slate-900 flex items-center gap-2"><ClipboardList className="h-4 w-4 text-indigo-500" /> Care Observations</CardTitle>
                       <CardDescription className="text-xs text-slate-400">Collaboration logs and patient notes</CardDescription>
                     </div>
-                    <Dialog open={isNoteDialogOpen} onOpenChange={setIsNoteDialogOpen}>
-                      <DialogTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md"><Plus className="h-4 w-4" /></Button>
-                      </DialogTrigger>
-                      <DialogContent className="sm:max-w-md rounded-[2.5rem] p-0 border-none shadow-2xl overflow-hidden">
-                        <DialogHeader className="p-8 bg-indigo-600 text-white">
-                          <DialogTitle className="text-xl font-bold">New Clinical Observation</DialogTitle>
-                          <DialogDescription className="text-indigo-100 text-xs font-medium">
-                            Append a clinical note or collaboration log to this patient's master record.
-                          </DialogDescription>
-                        </DialogHeader>
-                        <form onSubmit={handleAddNote} className="p-8 space-y-6 bg-white">
-                           <div className="space-y-4">
-                              <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Clinical Assessment</Label>
-                              <textarea 
-                                className="w-full h-32 p-4 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all font-medium text-sm resize-none outline-none border focus:border-indigo-100"
-                                placeholder="Enter clinical notes, observation details or diagnostic summary..."
-                                value={newNote}
-                                onChange={(e) => setNewNote(e.target.value)}
-                              />
-                           </div>
-                           <DialogFooter className="sm:justify-between flex items-center pt-2">
-                              <Button type="button" variant="ghost" className="rounded-2xl h-12 text-slate-400 font-bold uppercase tracking-widest text-[10px]" onClick={() => setIsNoteDialogOpen(false)}>Abort</Button>
-                              <Button type="submit" className="rounded-2xl h-12 px-8 bg-indigo-600 text-white font-bold text-xs uppercase tracking-widest shadow-xl shadow-indigo-100" disabled={!newNote.trim()}>
-                                 Finalize Note
-                              </Button>
-                           </DialogFooter>
-                        </form>
-                      </DialogContent>
-                    </Dialog>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md" onClick={() => navigate(`/patients/${id}/prescription`)}><Plus className="h-4 w-4" /></Button>
                   </CardHeader>
                   <CardContent className="p-0">
                     <div className="divide-y divide-slate-50">
-                      {notes.filter(n => n.patientId === id).length > 0 ? (
-                        notes.filter(n => n.patientId === id).map((note, i) => (
+                      {combinedNotes.length > 0 ? (
+                        combinedNotes.map((note, i) => (
                           <div key={i} className="p-6 flex gap-4 hover:bg-slate-50/50 transition-colors">
                             <Avatar className="h-9 w-9 rounded-lg bg-slate-100 border border-slate-200 shrink-0">
-                              <AvatarFallback className="text-[10px] font-bold text-slate-400">{note.authorName.charAt(0)}</AvatarFallback>
+                              <AvatarFallback className="text-[10px] font-bold text-slate-400">{(note.authorName || 'U').charAt(0)}</AvatarFallback>
                             </Avatar>
                             <div className="space-y-2 flex-1">
                                <div className="flex items-center justify-between">
-                                  <p className="text-[11px] font-bold text-slate-900">{note.authorName}</p>
+                                  <div className="flex items-center gap-2">
+                                    <p className="text-[11px] font-bold text-slate-900">{note.authorName || 'Unknown Author'}</p>
+                                    {note.type === 'prescription' && (
+                                      <Badge variant="outline" className="text-[9px] font-bold text-indigo-500 border-indigo-100 bg-indigo-50 uppercase tracking-widest px-1.5 py-0">From Prescription</Badge>
+                                    )}
+                                  </div>
                                   <span className="text-[10px] text-slate-400 font-medium">{new Date(note.createdAt).toLocaleDateString()}</span>
                                </div>
                                <p className="text-sm text-slate-600 leading-relaxed font-medium bg-white p-3 rounded-xl border border-slate-100 shadow-sm italic">
@@ -486,20 +485,20 @@ const PatientDetail = () => {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {prescriptions.length > 0 ? (
-                          prescriptions.map((m, i) => (
+                        {prescriptions.filter(rx => rx.patient_id === id).length > 0 ? (
+                          prescriptions.filter(rx => rx.patient_id === id).flatMap(rx => rx.medications).map((m, i) => (
                             <TableRow key={i} className="border-slate-50 hover:bg-slate-50/50 transition-colors group">
                               <TableCell className="py-4 pl-6">
                                  <div>
                                     <p className="font-bold text-sm text-slate-900">{m.name}</p>
-                                    <p className="text-[10px] text-slate-400 font-medium">{m.company}</p>
+                                    <p className="text-[10px] text-slate-400 font-medium">Prescribed</p>
                                  </div>
                               </TableCell>
                               <TableCell className="text-xs text-slate-600 font-bold py-4">{m.dosage}</TableCell>
                               <TableCell className="text-xs text-slate-500 font-medium py-4">{m.frequency}</TableCell>
-                              <TableCell className="text-xs text-slate-400 font-medium py-4">{m.expiry}</TableCell>
+                              <TableCell className="text-xs text-slate-400 font-medium py-4">{m.duration}</TableCell>
                               <TableCell className="text-center py-4">
-                                 <Badge className="bg-indigo-50 text-indigo-600 border-indigo-100 text-[9px] font-bold uppercase rounded h-5">{m.status}</Badge>
+                                 <Badge className="bg-indigo-50 text-indigo-600 border-indigo-100 text-[9px] font-bold uppercase rounded h-5">Active</Badge>
                               </TableCell>
                               <TableCell className="text-right pr-6 py-4">
                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-300 hover:text-slate-900"><MoreHorizontal className="h-4 w-4" /></Button>
@@ -569,9 +568,9 @@ const PatientDetail = () => {
                               </div>
                               <div className="grid gap-2">
                                 <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Clinical Notes</Label>
-                                <Input 
-                                  placeholder="Initial scan observations..." 
-                                  className="h-12 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all font-medium"
+                                <textarea 
+                                  placeholder="Initial scan observations, diagnosis summary, or details..." 
+                                  className="w-full h-32 p-4 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all font-medium text-sm resize-none outline-none border focus:border-indigo-100"
                                   value={uploadData.notes}
                                   onChange={(e) => setUploadData({ ...uploadData, notes: e.target.value })}
                                 />
@@ -668,13 +667,83 @@ const PatientDetail = () => {
             </TabsContent>
 
             <TabsContent value="timeline" className="mt-0 focus-visible:outline-none">
-              <Card className="bg-white rounded-xl border border-slate-200 shadow-sm p-8 flex flex-col items-center justify-center min-h-[400px] border">
-                 <div className="h-20 w-20 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 mb-6">
-                    <History className="h-10 w-10" />
-                 </div>
-                 <h3 className="text-lg font-bold text-slate-900 mb-2">Phase Timeline & Journey</h3>
-                 <p className="text-slate-500 text-sm italic max-w-sm text-center">Full journey logs including triage, consultation, diagnostic phases and discharge trajectory will be visualized in the next release.</p>
-              </Card>
+              <div className="space-y-6">
+                <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+                  <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                    <History className="h-5 w-5 text-indigo-500" /> Patient Journey
+                  </h3>
+                </div>
+                
+                <div className="relative pl-6 sm:pl-8 border-l-2 border-indigo-100 space-y-10 py-4">
+                  {timeline && timeline.length > 0 ? (
+                    timeline.map((event: any, i: number) => {
+                      let icon, title, desc, colorClass, bgClass;
+                      
+                      switch (event.type) {
+                        case 'patient_created':
+                          icon = <Users className="h-4 w-4" />;
+                          title = "Patient Registered";
+                          desc = `Registered with MRN: ${event.data.mrn}`;
+                          colorClass = "text-emerald-600";
+                          bgClass = "bg-emerald-50 border-emerald-100";
+                          break;
+                        case 'document_uploaded':
+                          icon = <Files className="h-4 w-4" />;
+                          title = "Document Uploaded";
+                          desc = `${event.data.file_type}: ${event.data.file_name}`;
+                          colorClass = "text-amber-600";
+                          bgClass = "bg-amber-50 border-amber-100";
+                          break;
+                        case 'prescription_added':
+                          icon = <Stethoscope className="h-4 w-4" />;
+                          title = "Prescription Issued";
+                          desc = event.data.summary;
+                          colorClass = "text-indigo-600";
+                          bgClass = "bg-indigo-50 border-indigo-100";
+                          break;
+                        case 'note_added':
+                          icon = <FileText className="h-4 w-4" />;
+                          title = "Clinical Note Added";
+                          desc = `Note: "${event.data.content}"`;
+                          colorClass = "text-blue-600";
+                          bgClass = "bg-blue-50 border-blue-100";
+                          break;
+                        default:
+                          icon = <Activity className="h-4 w-4" />;
+                          title = "Activity Recorded";
+                          desc = "System activity logged";
+                          colorClass = "text-slate-600";
+                          bgClass = "bg-slate-50 border-slate-100";
+                      }
+                      
+                      return (
+                        <div key={i} className="relative group">
+                          <div className={`absolute -left-[35px] sm:-left-[43px] h-8 w-8 rounded-full border-2 border-white flex items-center justify-center shadow-sm z-10 ${bgClass} ${colorClass}`}>
+                            {icon}
+                          </div>
+                          <div className="bg-white rounded-xl border border-slate-100 p-5 shadow-sm hover:shadow-md transition-shadow group-hover:border-indigo-100 relative">
+                            <div className="absolute top-5 -left-2 w-4 h-4 bg-white border-t border-l border-slate-100 transform -rotate-45 group-hover:border-indigo-100 transition-colors"></div>
+                            <div className="flex justify-between items-start mb-2">
+                              <h4 className={`text-sm font-bold ${colorClass}`}>{title}</h4>
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50 px-2 py-1 rounded">
+                                {new Date(event.timestamp).toLocaleString(undefined, {
+                                  month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                                })}
+                              </span>
+                            </div>
+                            <p className="text-sm font-medium text-slate-600 leading-relaxed">{desc}</p>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="py-12 text-center bg-white rounded-xl border border-slate-100 border-dashed">
+                      <History className="h-8 w-8 text-slate-300 mx-auto mb-3" />
+                      <p className="text-sm font-medium text-slate-500">No events recorded yet.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
             </TabsContent>
           </Tabs>
         </div>

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Department, Doctor, Patient, Document, Note, AvailabilitySlot } from '../types';
+import { Department, Doctor, Patient, Document, Note, AvailabilitySlot, Prescription } from '../types';
 import { 
   departments as initialDepartments, 
   doctors as initialDoctors, 
@@ -17,6 +17,8 @@ interface HospitalState {
   patients: Patient[];
   documents: Document[];
   notes: Note[];
+  prescriptions: Prescription[];
+  timeline: any[];
   isLoading: boolean;
   stats: {
     total_patients: number;
@@ -75,6 +77,13 @@ interface HospitalState {
   
   // Note Actions
   addNote: (note: Note) => void;
+  
+  // Prescription Actions
+  fetchPatientPrescriptions: (patientId: string) => Promise<Prescription[]>;
+  createPrescription: (data: Partial<Prescription>) => Promise<Prescription>;
+  
+  // Timeline Actions
+  fetchPatientTimeline: (patientId: string) => Promise<any[]>;
 }
 
 export const useHospitalStore = create<HospitalState>((set, get) => ({
@@ -84,6 +93,8 @@ export const useHospitalStore = create<HospitalState>((set, get) => ({
   documents: [],
   documentRepository: { data: [], total: 0 },
   notes: initialNotes,
+  prescriptions: [],
+  timeline: [],
   isLoading: false,
   stats: null,
 
@@ -563,5 +574,68 @@ export const useHospitalStore = create<HospitalState>((set, get) => ({
     } catch (error) {
       console.error('Fetch notes error:', error);
     }
+  },
+
+  fetchPatientPrescriptions: async (patientId: string) => {
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch(`${API_URL}/prescriptions?patient_id=${patientId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        set((state) => {
+          // Filter out existing for this patient
+          const otherRx = state.prescriptions.filter(rx => rx.patient_id !== patientId);
+          return { prescriptions: [...data, ...otherRx] };
+        });
+        return data;
+      }
+    } catch (error) {
+      console.error('Fetch prescriptions error:', error);
+    }
+    return [];
+  },
+
+  createPrescription: async (data: Partial<Prescription>) => {
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch(`${API_URL}/prescriptions/`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(data),
+      });
+      if (response.ok) {
+        const result = await response.json();
+        set((state) => ({ prescriptions: [result, ...state.prescriptions] }));
+        return result;
+      } else {
+        const error = await response.json();
+        throw new Error(error.detail || 'Failed to create prescription');
+      }
+    } catch (error) {
+      console.error('Create prescription error:', error);
+      throw error;
+    }
+  },
+
+  fetchPatientTimeline: async (patientId: string) => {
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch(`${API_URL}/patients/${patientId}/timeline`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        set({ timeline: data });
+        return data;
+      }
+    } catch (error) {
+      console.error('Fetch timeline error:', error);
+    }
+    return [];
   },
 }));

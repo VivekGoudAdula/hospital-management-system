@@ -6,6 +6,7 @@ import Departments from './pages/Departments';
 import Doctors from './pages/Doctors';
 import Patients from './pages/Patients';
 import PatientDetail from './pages/PatientDetail';
+import PrescriptionEditor from './pages/PrescriptionEditor';
 import Documents from './pages/Documents';
 import Settings from './pages/Settings';
 import Login from './pages/Login';
@@ -45,6 +46,7 @@ export default function App() {
           <Route path="/doctor/dashboard" element={<Dashboard />} />
           <Route path="/patients" element={<Patients />} />
           <Route path="/patients/:id" element={<PatientDetail />} />
+          <Route path="/patients/:id/prescription" element={<PrescriptionEditor />} />
           <Route path="/documents" element={<Documents />} />
           <Route path="/settings" element={<Settings />} />
           

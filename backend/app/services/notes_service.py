@@ -46,7 +46,10 @@ class NotesService:
     def _format_note(self, note: Dict[str, Any]) -> Dict[str, Any]:
         note["id"] = str(note["_id"])
         note["patient_id"] = str(note["patient_id"])
-        note["doctor_id"] = str(note["doctor_id"])
+        if "doctor_id" in note:
+            note["doctor_id"] = str(note["doctor_id"])
+        else:
+            note["doctor_id"] = ""
         if note.get("document_id"):
             note["document_id"] = str(note["document_id"])
         return note

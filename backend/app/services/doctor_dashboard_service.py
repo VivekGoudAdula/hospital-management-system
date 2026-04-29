@@ -101,6 +101,20 @@ class DoctorDashboardService:
                 }
             })
 
+        # 4. Prescriptions Added
+        prescriptions = await db.prescriptions.find({"patient_id": ObjectId(patient_id)}).to_list(100)
+        for rx in prescriptions:
+            med_names = [m.get("name", "") for m in rx.get("medications", [])]
+            meds_summary = ", ".join(med_names) if med_names else "No medications"
+            timeline.append({
+                "type": "prescription_added",
+                "timestamp": rx["created_at"],
+                "data": {
+                    "summary": f"Prescription created with {len(rx.get('medications', []))} medications ({meds_summary})",
+                    "clinical_notes": rx.get("clinical_notes", "")
+                }
+            })
+
         # Sort combined timeline descending by timestamp
         timeline.sort(key=lambda x: x["timestamp"], reverse=True)
         return timeline
