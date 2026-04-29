@@ -24,7 +24,6 @@ export interface Department {
   totalBeds: number;
   availableBeds: number;
   icuSlots: number;
-  description: string;
 }
 
 export interface Doctor {

@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .config.db import connect_to_mongo, close_mongo_connection
-from .routes import auth_routes
+from .routes import auth_routes, department_routes, doctor_routes
 
 app = FastAPI(title="ApexCare Backend")
 
@@ -24,6 +24,8 @@ async def shutdown_db_client():
 
 # Include Routes
 app.include_router(auth_routes.router, prefix="/api")
+app.include_router(department_routes.router, prefix="/api")
+app.include_router(doctor_routes.router, prefix="/api")
 
 @app.get("/")
 async def root():
