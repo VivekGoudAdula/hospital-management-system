@@ -85,7 +85,11 @@ const Documents = () => {
     uploadDocument,
     deleteDocument,
     patients,
-    fetchPatients
+    fetchPatients,
+    doctors,
+    fetchDoctors,
+    fetchPatientStudies,
+    studies: patientStudies
   } = useHospitalStore();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -99,14 +103,20 @@ const Documents = () => {
   // Form State
   const [uploadForm, setUploadForm] = useState({
     patient_id: '',
-    file_type: 'Blood Test',
+    file_type: 'X-Ray',
+    scan_date: new Date().toISOString().split('T')[0],
+    body_part: '',
+    department: '',
     notes: '',
+    findings: '',
+    impression: '',
     file: null as File | null
   });
 
   useEffect(() => {
     fetchDocumentRepository();
     fetchPatients();
+    fetchDoctors();
   }, []);
 
   useEffect(() => {
@@ -125,8 +135,16 @@ const Documents = () => {
   const handleOpenPatientRecords = async (patientId: string) => {
     setSelectedPatientId(patientId);
     const docs = await fetchPatientDocuments(patientId);
-    if (docs && docs.length > 0) {
-      setSelectedDoc(docs[0]); // Open the latest document immediately
+    const studies = await fetchPatientStudies(patientId);
+    
+    // Combine individual documents and studies for a unified view
+    const allRecords = [
+      ...docs.map(d => ({ ...d, isStudy: false })),
+      ...studies.map(s => ({ ...s, isStudy: true, type: s.studyType, uploadDate: s.createdAt }))
+    ].sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime());
+
+    if (allRecords.length > 0) {
+      setSelectedDoc(allRecords[0]);
     } else {
       toast.info('No documents found for this patient. Use the upload button to add one.');
     }
@@ -142,14 +160,29 @@ const Documents = () => {
     const formData = new FormData();
     formData.append('patient_id', uploadForm.patient_id);
     formData.append('file_type', uploadForm.file_type);
+    formData.append('scan_date', uploadForm.scan_date);
+    formData.append('body_part', uploadForm.body_part);
+    formData.append('department', uploadForm.department);
     formData.append('notes', uploadForm.notes);
+    formData.append('findings', uploadForm.findings);
+    formData.append('impression', uploadForm.impression);
     formData.append('file', uploadForm.file);
 
     try {
       await uploadDocument(formData);
       toast.success('Document uploaded successfully');
       setIsUploadModalOpen(false);
-      setUploadForm({ patient_id: '', file_type: 'Blood Test', notes: '', file: null });
+      setUploadForm({ 
+        patient_id: '', 
+        file_type: 'X-Ray', 
+        scan_date: new Date().toISOString().split('T')[0],
+        body_part: '',
+        department: '',
+        notes: '', 
+        findings: '',
+        impression: '',
+        file: null 
+      });
       fetchDocumentRepository(); // Refresh list
       if (selectedPatientId) fetchPatientDocuments(selectedPatientId);
     } catch (error) {
@@ -171,6 +204,24 @@ const Documents = () => {
       }
     }
   };
+
+  const unifiedPatientDocs = React.useMemo(() => {
+    if (!selectedPatientId) return [];
+    
+    const combined = [
+      ...patientDocuments.filter(d => d.patientId === selectedPatientId).map(d => ({ ...d, isStudy: false })),
+      ...patientStudies.filter(s => s.patientId === selectedPatientId).map(s => ({ 
+        ...s, 
+        isStudy: true, 
+        type: s.studyType, 
+        uploadDate: s.createdAt,
+        fileName: s.files[0]?.fileName || 'Study'
+      }))
+    ];
+    return combined.sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime());
+  }, [patientDocuments, patientStudies, selectedPatientId]);
+
+  const [activeFileIndex, setActiveFileIndex] = useState(0);
 
   const currentPatient = documentRepository.data.find(d => d.patient_id === selectedPatientId);
 
@@ -212,38 +263,94 @@ const Documents = () => {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-500 uppercase">File Type</label>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Modality</label>
                   <Select value={uploadForm.file_type} onValueChange={(val) => setUploadForm({...uploadForm, file_type: val})}>
-                    <SelectTrigger className="h-11 rounded-md border-slate-200">
+                    <SelectTrigger className="h-11 rounded-xl bg-slate-50 border-slate-100 focus:ring-2 focus:ring-indigo-100">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Blood Test">Blood Test</SelectItem>
-                      <SelectItem value="MRI">MRI Scan</SelectItem>
+                    <SelectContent className="rounded-xl border-slate-100 shadow-xl">
                       <SelectItem value="X-Ray">X-Ray</SelectItem>
+                      <SelectItem value="MRI">MRI Scan</SelectItem>
+                      <SelectItem value="CT Scan">CT Scan</SelectItem>
+                      <SelectItem value="Blood Test">Blood Test</SelectItem>
                       <SelectItem value="Prescription">Prescription</SelectItem>
                       <SelectItem value="Other">Other</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-500 uppercase">File</label>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Scan Date</label>
                   <Input 
-                    type="file" 
-                    className="h-11 rounded-md border-slate-200 pt-2" 
-                    onChange={(e) => setUploadForm({...uploadForm, file: e.target.files?.[0] || null})}
+                    type="date" 
+                    className="h-11 rounded-xl bg-slate-50 border-slate-100 focus:ring-2 focus:ring-indigo-100" 
+                    value={uploadForm.scan_date}
+                    onChange={(e) => setUploadForm({...uploadForm, scan_date: e.target.value})}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Body Part</label>
+                  <Input 
+                    placeholder="e.g. Chest, Brain" 
+                    className="h-11 rounded-xl bg-slate-50 border-slate-100 focus:ring-2 focus:ring-indigo-100" 
+                    value={uploadForm.body_part}
+                    onChange={(e) => setUploadForm({...uploadForm, body_part: e.target.value})}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Department</label>
+                  <Input 
+                    placeholder="e.g. Radiology" 
+                    className="h-11 rounded-xl bg-slate-50 border-slate-100 focus:ring-2 focus:ring-indigo-100" 
+                    value={uploadForm.department}
+                    onChange={(e) => setUploadForm({...uploadForm, department: e.target.value})}
                   />
                 </div>
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-500 uppercase">Clinical Notes</label>
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Clinical Impression</label>
+                <textarea 
+                  placeholder="Primary diagnostic conclusion..." 
+                  className="w-full h-24 p-4 rounded-xl bg-slate-50 border-slate-100 focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all font-medium text-sm resize-none outline-none border focus:border-indigo-200"
+                  value={uploadForm.impression}
+                  onChange={(e) => setUploadForm({...uploadForm, impression: e.target.value})}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Clinical Notes</label>
                 <Input 
                   placeholder="Additional observations..." 
-                  className="h-11 rounded-md border-slate-200"
+                  className="h-11 rounded-xl bg-slate-50 border-slate-100 focus:ring-2 focus:ring-indigo-100"
                   value={uploadForm.notes}
                   onChange={(e) => setUploadForm({...uploadForm, notes: e.target.value})}
                 />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Diagnostic Asset (File)</label>
+                <div className="relative group">
+                  <Input 
+                    type="file" 
+                    className="hidden" 
+                    id="doc-file-upload"
+                    onChange={(e) => setUploadForm({...uploadForm, file: e.target.files?.[0] || null})}
+                  />
+                  <label 
+                    htmlFor="doc-file-upload" 
+                    className="flex items-center justify-center w-full h-20 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer"
+                  >
+                    <div className="text-center">
+                      <Upload className="h-5 w-5 text-slate-400 mx-auto mb-1 group-hover:text-indigo-600 transition-colors" />
+                      <p className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">
+                        {uploadForm.file ? uploadForm.file.name : 'Select clinical asset'}
+                      </p>
+                    </div>
+                  </label>
+                </div>
               </div>
             </div>
             <DialogFooter>
@@ -276,6 +383,7 @@ const Documents = () => {
                 <SelectContent>
                   <SelectItem value="all">All Types</SelectItem>
                   <SelectItem value="MRI">MRI Scan</SelectItem>
+                  <SelectItem value="CT Scan">CT Scan</SelectItem>
                   <SelectItem value="X-Ray">X-Ray</SelectItem>
                   <SelectItem value="Blood Test">Blood Test</SelectItem>
                   <SelectItem value="Prescription">Prescription</SelectItem>
@@ -465,17 +573,96 @@ const Documents = () => {
                     <Button variant="secondary" size="icon" className="h-8 w-8 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100" onClick={() => window.open(selectedDoc.fileUrl)}><Download className="h-4 w-4" /></Button>
                     <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-slate-400 hover:text-slate-600"><Share2 className="h-4 w-4" /></Button>
                   </div>
-               </div>
-
-               <div className="flex-1 bg-[#475569] p-8 flex items-center justify-center overflow-auto">
-                  <div className="w-full max-w-4xl bg-white shadow-2xl rounded-sm overflow-hidden">
-                    {selectedDoc?.fileUrl?.toLowerCase().endsWith('.pdf') ? (
-                      <iframe src={`${selectedDoc.fileUrl}#toolbar=0`} className="w-full h-[1200px] border-none" />
+               </div>                <div className="flex-1 bg-slate-900/95 p-8 flex items-center justify-center overflow-auto relative group">
+                  <div className="w-full max-w-4xl bg-white shadow-2xl rounded-sm overflow-hidden transform transition-transform duration-500 hover:scale-[1.02]">
+                    {selectedDoc?.isStudy ? (
+                      selectedDoc.files[activeFileIndex]?.fileUrl?.toLowerCase().endsWith('.pdf') ? (
+                        <iframe src={`${selectedDoc.files[activeFileIndex].fileUrl}#toolbar=0`} className="w-full h-[1200px] border-none" />
+                      ) : (
+                        <img src={selectedDoc.files[activeFileIndex]?.fileUrl} className="w-full h-auto object-contain" alt="Clinical Study Asset" />
+                      )
                     ) : (
-                      <img src={selectedDoc?.fileUrl} className="w-full h-auto" alt="Clinical Document" />
+                      selectedDoc?.fileUrl?.toLowerCase().endsWith('.pdf') ? (
+                        <iframe src={`${selectedDoc.fileUrl}#toolbar=0`} className="w-full h-[1200px] border-none" />
+                      ) : (
+                        <img src={selectedDoc?.fileUrl} className="w-full h-auto object-contain" alt="Clinical Document" />
+                      )
                     )}
                   </div>
-               </div>
+                  
+                  {selectedDoc?.isStudy && selectedDoc.files?.length > 1 && (
+                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-white/10 backdrop-blur-md border border-white/20 p-2 rounded-2xl flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-8 w-8 text-white hover:bg-white/20 rounded-xl"
+                        onClick={() => setActiveFileIndex(prev => Math.max(0, prev - 1))}
+                        disabled={activeFileIndex === 0}
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      <div className="px-3 flex items-center">
+                        <span className="text-[10px] font-bold text-white/80 uppercase tracking-widest">
+                          {activeFileIndex + 1} / {selectedDoc.files.length}
+                        </span>
+                      </div>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-8 w-8 text-white hover:bg-white/20 rounded-xl"
+                        onClick={() => setActiveFileIndex(prev => Math.min(selectedDoc.files.length - 1, prev + 1))}
+                        disabled={activeFileIndex === selectedDoc.files.length - 1}
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Horizontal Quick Gallery - Study Files or Unified Docs */}
+                <div className="h-24 bg-white border-t border-slate-100 p-3 flex gap-3 overflow-x-auto scrollbar-hide shrink-0">
+                  {selectedDoc?.isStudy ? (
+                    selectedDoc.files.map((file, idx) => (
+                      <motion.div
+                        key={file.id}
+                        whileHover={{ y: -4 }}
+                        className={cn(
+                          "h-full aspect-square rounded-xl border-2 cursor-pointer overflow-hidden relative shrink-0 transition-all",
+                          idx === activeFileIndex ? "border-indigo-500 shadow-lg shadow-indigo-100" : "border-slate-100 grayscale hover:grayscale-0"
+                        )}
+                        onClick={() => setActiveFileIndex(idx)}
+                      >
+                        {file.fileUrl?.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                          <img src={file.fileUrl} className="w-full h-full object-cover" alt="" />
+                        ) : (
+                          <div className="w-full h-full bg-slate-50 flex items-center justify-center">
+                            <FileText className="h-5 w-5 text-slate-400" />
+                          </div>
+                        )}
+                      </motion.div>
+                    ))
+                  ) : (
+                    unifiedPatientDocs.map((doc) => (
+                      <motion.div
+                        key={doc.id}
+                        whileHover={{ y: -4 }}
+                        className={cn(
+                          "h-full aspect-square rounded-xl border-2 cursor-pointer overflow-hidden relative shrink-0 transition-all",
+                          doc.id === selectedDoc?.id ? "border-indigo-500 shadow-lg shadow-indigo-100" : "border-slate-100 grayscale hover:grayscale-0"
+                        )}
+                        onClick={() => {setSelectedDoc(doc); setActiveFileIndex(0);}}
+                      >
+                        {doc.fileUrl?.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                          <img src={doc.fileUrl} className="w-full h-full object-cover" alt="" />
+                        ) : (
+                          <div className="w-full h-full bg-slate-50 flex items-center justify-center">
+                            <FileText className="h-5 w-5 text-slate-400" />
+                          </div>
+                        )}
+                      </motion.div>
+                    ))
+                  )}
+                </div>
             </div>
 
             <div className="w-full md:w-[400px] flex flex-col gap-6 overflow-y-auto pr-2 scrollbar-hide">
@@ -486,74 +673,159 @@ const Documents = () => {
                      </div>
                      <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Diagnostic Details</h3>
                   </div>
-
-                  <div className="grid grid-cols-2 gap-y-8 gap-x-12">
-                     <div className="space-y-1.5">
-                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">Diagnostic ID</p>
-                        <p className="text-xs font-bold text-slate-900">DOC-{selectedDoc?.id?.slice(-4).toUpperCase()}</p>
-                     </div>
-                     <div className="space-y-1.5">
-                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">Entry Date</p>
-                        <p className="text-xs font-bold text-slate-900">{selectedDoc && new Date(selectedDoc.uploadDate).toLocaleDateString()}</p>
-                     </div>
-                     <div className="space-y-1.5">
-                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">Record Type</p>
-                        <p className="text-xs font-bold text-slate-900 truncate">{selectedDoc?.type}</p>
-                     </div>
-                  </div>
+                  <div className="grid grid-cols-2 gap-y-6 gap-x-8">
+                      <div className="space-y-1">
+                         <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">Diagnostic ID</p>
+                         <p className="text-xs font-bold text-slate-900">DOC-{selectedDoc?.id?.slice?.(-4)?.toUpperCase()}</p>
+                      </div>
+                      <div className="space-y-1">
+                         <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">Upload Date</p>
+                         <p className="text-xs font-bold text-slate-900">{selectedDoc?.uploadDate ? new Date(selectedDoc?.uploadDate)?.toLocaleDateString?.() : ''}</p>
+                      </div>
+                      <div className="space-y-1">
+                         <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">Modality</p>
+                         <p className="text-xs font-bold text-slate-900 truncate">{selectedDoc?.type}</p>
+                      </div>
+                      <div className="space-y-1">
+                         <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">Body Part</p>
+                         <p className="text-xs font-bold text-slate-900">{selectedDoc?.bodyPart || 'N/A'}</p>
+                      </div>
+                      <div className="space-y-1">
+                         <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">Department</p>
+                         <p className="text-xs font-bold text-slate-900">{selectedDoc?.department || 'General'}</p>
+                      </div>
+                       <div className="space-y-1">
+                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">Source</p>
+                          <p className="text-xs font-bold text-indigo-600 truncate">Hospital Main</p>
+                       </div>
+                       <div className="col-span-2 pt-2 border-t border-slate-50 space-y-1">
+                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">Uploaded By</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <div className="h-5 w-5 rounded-full bg-indigo-50 flex items-center justify-center text-[8px] font-bold text-indigo-600 border border-indigo-100">
+                              {doctors.find(d => d.id === selectedDoc?.uploadedBy)?.name?.charAt(0) || 'U'}
+                            </div>
+                            <p className="text-xs font-bold text-slate-700">
+                              {doctors.find(d => d.id === selectedDoc?.uploadedBy)?.name || 'Medical Staff'}
+                            </p>
+                          </div>
+                       </div>
+                    </div>
                </div>
 
-               <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-8 flex flex-col gap-4 shrink-0">
+               <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-8 flex flex-col gap-6 shrink-0">
                   <div className="flex items-center gap-3">
                      <div className="h-5 w-5 rounded-full bg-emerald-50 flex items-center justify-center">
                         <ClipboardList className="h-3 w-3 text-emerald-600" />
                      </div>
-                     <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Clinical Notes</h3>
+                     <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Clinical Report</h3>
                   </div>
-                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                    <p className="text-[11px] text-slate-600 italic leading-relaxed">"{selectedDoc?.notes || 'No clinical observations attached to this record.'}"</p>
+                  <div className="space-y-6">
+                    {selectedDoc?.findings && (
+                      <div className="space-y-2">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Detailed Findings</p>
+                        <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-100">{selectedDoc.findings}</p>
+                      </div>
+                    )}
+                    {selectedDoc?.impression && (
+                      <div className="space-y-2">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Clinical Impression</p>
+                        <p className="text-xs font-bold text-indigo-700 leading-relaxed bg-indigo-50/50 p-3 rounded-xl border border-indigo-100/50">{selectedDoc.impression}</p>
+                      </div>
+                    )}
+                    {selectedDoc?.symptoms && (
+                      <div className="space-y-2">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Presenting Symptoms</p>
+                        <p className="text-xs text-slate-600 leading-relaxed bg-rose-50/30 p-3 rounded-xl border border-rose-100/30">{selectedDoc.symptoms}</p>
+                      </div>
+                    )}
+                    {!selectedDoc?.findings && !selectedDoc?.impression && !selectedDoc?.notes && (
+                      <p className="text-[11px] text-slate-400 italic">No clinical observations attached to this record.</p>
+                    )}
+                    {selectedDoc?.notes && (
+                       <div className="space-y-2">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Physician Annotations</p>
+                        <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-100 italic">"{selectedDoc.notes}"</p>
+                      </div>
+                    )}
                   </div>
                </div>
 
                <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-8 flex flex-col gap-4 shrink-0">
-                  <div className="flex items-center gap-3">
-                     <div className="h-5 w-5 rounded-full bg-indigo-50 flex items-center justify-center">
-                        <History className="h-3 w-3 text-indigo-600" />
-                     </div>
-                     <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">All Documents</h3>
-                     <span className="ml-auto text-[9px] font-bold text-slate-300 uppercase tracking-widest">{patientDocuments.length} files</span>
+                  <div className="flex flex-col gap-1 mb-2">
+                     <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest leading-none">Diagnostic History For</p>
+                     <h3 className="text-sm font-bold text-slate-900 truncate">{currentPatient?.patient_name || 'Active Patient'}</h3>
+                     <p className="text-[10px] text-slate-400 font-mono">{currentPatient?.mrn}</p>
                   </div>
-                  <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1 scrollbar-hide">
-                    {patientDocuments.map(doc => (
-                      <div
+                  <div className="flex items-center gap-3 pt-4 border-t border-slate-50">
+                      <div className="h-5 w-5 rounded-full bg-indigo-50 flex items-center justify-center">
+                         <History className="h-3 w-3 text-indigo-600" />
+                      </div>
+                      <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Record Timeline</h3>
+                      <span className="ml-auto text-[9px] font-bold text-slate-300 uppercase tracking-widest">{unifiedPatientDocs.length} assets</span>
+                   </div>
+                   <div className="grid grid-cols-1 gap-2 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                    {unifiedPatientDocs.map((doc, idx) => (
+                      <motion.div
                         key={doc.id}
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: idx * 0.05 }}
                         className={cn(
                           "flex items-center gap-3 p-3 rounded-2xl border transition-all cursor-pointer group",
                           doc.id === selectedDoc?.id
                             ? "bg-indigo-50 border-indigo-200 shadow-sm"
-                            : "bg-slate-50 hover:bg-indigo-50 border-slate-100 hover:border-indigo-100"
+                            : "bg-slate-50 hover:bg-white hover:border-indigo-100 hover:shadow-md"
                         )}
-                        onClick={() => setSelectedDoc(doc)}
+                        onClick={() => {setSelectedDoc(doc); setActiveFileIndex(0);}}
                       >
                          <div className={cn(
-                           "h-9 w-9 rounded-xl flex items-center justify-center border shrink-0",
+                           "h-10 w-10 rounded-xl flex items-center justify-center border shrink-0 transition-colors relative overflow-hidden",
                            doc.id === selectedDoc?.id
                              ? "bg-indigo-600 border-indigo-600 text-white"
-                             : "bg-white border-slate-100 text-slate-400 group-hover:text-indigo-600"
+                             : "bg-white border-slate-100 text-slate-400 group-hover:text-indigo-600 group-hover:border-indigo-100"
                          )}>
-                            <FileText className="h-4 w-4" />
+                            {doc.isStudy ? (
+                              doc.files[0]?.fileUrl?.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                                <img src={doc.files[0].fileUrl} className="w-full h-full object-cover" alt="" />
+                              ) : (
+                                <Files className="h-5 w-5" />
+                              )
+                            ) : (
+                              doc.fileUrl?.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                                <img src={doc.fileUrl} className="w-full h-full object-cover" alt="" />
+                              ) : (
+                                <FileText className="h-5 w-5" />
+                              )
+                            )}
+                            {doc.isStudy && (
+                              <div className="absolute top-0 right-0 bg-indigo-600 text-[6px] text-white px-1 font-bold">
+                                STUDY
+                              </div>
+                            )}
                          </div>
                          <div className="min-w-0 flex-1">
-                            <p className={cn("text-[11px] font-bold truncate", doc.id === selectedDoc?.id ? "text-indigo-700" : "text-slate-900")}>{doc.type}</p>
-                            <p className="text-[9px] text-slate-400 font-medium uppercase tracking-tighter mt-0.5">{new Date(doc.uploadDate).toLocaleDateString()}</p>
+                            <div className="flex items-center justify-between gap-2">
+                               <p className={cn("text-[11px] font-bold truncate", doc.id === selectedDoc?.id ? "text-indigo-700" : "text-slate-900")}>
+                                 {doc.type}
+                               </p>
+                               <Badge className="bg-slate-200/50 text-[8px] text-slate-500 font-bold border-none h-4 px-1">
+                                 {doc.isStudy ? `${doc.files.length} FILES` : 'FILE'}
+                               </Badge>
+                            </div>
+                             <p className="text-[9px] text-slate-400 font-medium uppercase tracking-tighter mt-0.5 flex items-center justify-between">
+                               <span>{new Date(doc.uploadDate).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                               <span className="text-indigo-400 font-bold opacity-0 group-hover:opacity-100 transition-opacity">
+                                 {doctors.find(d => d.id === doc.uploadedBy)?.name?.split(' ')[0] || 'Staff'}
+                               </span>
+                             </p>
                          </div>
-                         {doc.id === selectedDoc?.id && (
-                           <div className="h-2 w-2 rounded-full bg-indigo-500 shrink-0" />
-                         )}
-                      </div>
+                      </motion.div>
                     ))}
-                    {patientDocuments.length === 0 && (
-                      <p className="text-[10px] text-slate-400 italic text-center py-4">No documents found.</p>
+                    {unifiedPatientDocs.length === 0 && (
+                      <div className="py-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                        <FileSearch className="h-8 w-8 text-slate-300 mx-auto mb-2" />
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">No documents</p>
+                      </div>
                     )}
                   </div>
                </div>

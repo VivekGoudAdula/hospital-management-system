@@ -82,12 +82,28 @@ export interface Document {
   type: string;
   fileName: string;
   fileUrl: string;
-  notes: string;
+  
+  // New structured fields
+  scanDate?: string;
+  bodyPart?: string;
+  department?: string;
+  referringDoctorId?: string;
+  
+  findings?: string;
+  impression?: string;
+  
+  symptoms?: string;
+  clinicalHistory?: string;
+  reasonForScan?: string;
+  doctorNotes?: string;
+  
+  notes: string; // Legacy
   uploadDate: string;
   patientName?: string;
   patientMrn?: string;
   uploadedBy?: string;
 }
+
 
 export interface Note {
   id: string;
@@ -115,4 +131,41 @@ export interface Prescription {
   medications: MedicationItem[];
   additional_notes: string;
   created_at: string;
+}
+
+export interface StudyFile {
+  id: string;
+  studyId: string;
+  fileUrl: string;
+  fileName: string;
+  fileFormat: string;
+  createdAt: string;
+}
+
+export interface DocumentStudy {
+  id: string;
+  patientId: string;
+  studyType: string;
+  bodyPart?: string;
+  scanDate?: string;
+  department?: string;
+  referringDoctorId?: string;
+  
+  findings?: string;
+  impression?: string;
+  
+  symptoms?: string;
+  clinicalHistory?: string;
+  reasonForScan?: string;
+  doctorNotes?: string;
+  
+  uploadedBy: string;
+  createdAt: string;
+  files: StudyFile[];
+  
+  // For repository table
+  patientName?: string;
+  mrn?: string;
+  appId?: string;
+  filesCount?: number;
 }

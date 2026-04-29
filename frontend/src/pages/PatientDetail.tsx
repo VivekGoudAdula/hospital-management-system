@@ -98,16 +98,25 @@ const PatientDetail = () => {
   const [isNoteDialogOpen, setIsNoteDialogOpen] = useState(false);
   const [newNote, setNewNote] = useState('');
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedDoc, setSelectedDoc] = useState<any>(null);
+  const [selectedStudy, setSelectedStudy] = useState<DocumentStudy | null>(null);
+  const [activeFileIndex, setActiveFileIndex] = useState(0);
   const [activeTab, setActiveTab] = useState('clinical');
   const [searchTerm, setSearchTerm] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
+  const [uploadStep, setUploadStep] = useState(1);
+  const [stagedAssets, setStagedAssets] = useState<{ file: File, bodyPart: string }[]>([]);
   const [uploadData, setUploadData] = useState({
-    file_type: 'MRI',
-    notes: ''
+    file_type: 'X-ray',
+    scan_date: new Date().toISOString().split('T')[0],
+    referring_doctor_id: '',
+    findings: '',
+    impression: '',
+    symptoms: '',
+    clinical_history: '',
+    reason_for_scan: '',
+    doctor_notes: '',
   });
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -116,7 +125,7 @@ const PatientDetail = () => {
       try {
         const p = await fetchPatientById(id);
         setPatient(p);
-        await fetchPatientDocuments(id);
+        await fetchPatientStudies(id);
         await fetchDoctors();
         await fetchNotesByPatient(id);
         await useHospitalStore.getState().fetchPatientPrescriptions(id);
@@ -130,7 +139,7 @@ const PatientDetail = () => {
     loadData();
   }, [id]);
 
-  const { prescriptions, timeline } = useHospitalStore();
+  const { prescriptions, timeline, studies, uploadStudy, fetchPatientStudies, deleteStudy } = useHospitalStore();
 
   const assignedDoctor = doctors.find(d => d.id === patient?.assignedDoctorId);
 
@@ -167,27 +176,40 @@ const PatientDetail = () => {
 
   const handleFileUpload = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedFile || !id) return;
+    if (stagedAssets.length === 0 || !id) return;
 
     setIsUploading(true);
     const formData = new FormData();
-    formData.append('file', selectedFile);
+    stagedAssets.forEach(asset => {
+      formData.append('files', asset.file);
+    });
     formData.append('patient_id', id);
-    formData.append('file_type', uploadData.file_type);
-    formData.append('notes', uploadData.notes);
+    formData.append('study_type', uploadData.file_type);
+    formData.append('scan_date', uploadData.scan_date);
+    // Join all body parts for the main record
+    formData.append('body_part', stagedAssets.map(a => a.bodyPart).filter(Boolean).join(', ') || 'General');
+    formData.append('referring_doctor_id', uploadData.referring_doctor_id);
+    formData.append('findings', uploadData.findings);
+    formData.append('impression', uploadData.impression);
+    formData.append('symptoms', uploadData.symptoms);
+    formData.append('clinical_history', uploadData.clinical_history);
+    formData.append('reason_for_scan', uploadData.reason_for_scan);
+    formData.append('doctor_notes', uploadData.doctor_notes);
 
     try {
-      await uploadDocument(formData);
-      toast.success('Document uploaded successfully');
+      await uploadStudy(formData);
+      toast.success('Study uploaded successfully');
       setIsUploadDialogOpen(false);
-      setSelectedFile(null);
-      setUploadData({ file_type: 'MRI', notes: '' });
-    } catch (error: any) {
-      toast.error(error.message || 'Upload failed');
+      setStagedAssets([]);
+      setUploadStep(1);
+      fetchPatientStudies(id);
+    } catch (error) {
+      toast.error('Failed to upload study');
     } finally {
       setIsUploading(false);
     }
   };
+
 
   const handleAddNote = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -231,11 +253,11 @@ const PatientDetail = () => {
     );
   }
 
-  const patientDocs = documents;
-  const uploaderDoc = doctors.find(d => d.id === selectedDoc?.uploadedBy);
-  const filteredDocs = documents.filter(doc => 
-    doc.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (doc.fileName && doc.fileName.toLowerCase().includes(searchTerm.toLowerCase()))
+  const uploaderDoc = doctors.find(d => d.id === selectedStudy?.uploadedBy);
+  const filteredStudies = studies.filter(study => 
+    (study.studyType && study.studyType.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (study.bodyPart && study.bodyPart.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (study.impression && study.impression.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   return (
@@ -384,7 +406,7 @@ const PatientDetail = () => {
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="bg-slate-100 w-full md:w-auto h-11 rounded-md border border-slate-200 p-1 flex items-center gap-1 mb-8 shadow-inner overflow-x-auto">
               <TabsTrigger value="clinical" className="px-5 text-xs font-bold text-slate-500 data-[state=active]:bg-white data-[state=active]:text-indigo-600 data-[state=active]:shadow-sm rounded-md transition-all">Clinical Insights</TabsTrigger>
-              <TabsTrigger value="documents" className="px-5 text-xs font-bold text-slate-500 data-[state=active]:bg-white data-[state=active]:text-indigo-600 data-[state=active]:shadow-sm rounded-md transition-all flex items-center gap-2">Records <Badge className="bg-slate-100 text-slate-500 text-[9px] border-none px-1 h-3.5">{patientDocs.length}</Badge></TabsTrigger>
+              <TabsTrigger value="documents" className="px-5 text-xs font-bold text-slate-500 data-[state=active]:bg-white data-[state=active]:text-indigo-600 data-[state=active]:shadow-sm rounded-md transition-all flex items-center gap-2">Records <Badge className="bg-slate-100 text-slate-500 text-[9px] border-none px-1 h-3.5">{studies.length}</Badge></TabsTrigger>
               <TabsTrigger value="timeline" className="px-5 text-xs font-bold text-slate-500 data-[state=active]:bg-white data-[state=active]:text-indigo-600 data-[state=active]:shadow-sm rounded-md transition-all">Phase Timeline</TabsTrigger>
               {/* <TabsTrigger value="billing" className="px-5 text-xs font-bold text-slate-500 data-[state=active]:bg-white data-[state=active]:text-indigo-600 data-[state=active]:shadow-sm rounded-md transition-all">Billing</TabsTrigger> */}
             </TabsList>
@@ -535,129 +557,305 @@ const PatientDetail = () => {
                      <Button variant="outline" className="flex-1 sm:flex-none h-10 rounded-md border-slate-200 text-slate-600 font-bold gap-2 text-xs">
                         <Filter className="h-3.5 w-3.5" /> Categorize
                      </Button>
-                     <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
+                     <Dialog open={isUploadDialogOpen} onOpenChange={(open) => {
+                       setIsUploadDialogOpen(open);
+                       if (!open) {
+                         setStagedAssets([]);
+                         setUploadStep(1);
+                       }
+                     }}>
                         <DialogTrigger asChild>
                           <Button className="flex-1 sm:flex-none h-10 rounded-md bg-white border border-indigo-200 text-indigo-600 hover:bg-indigo-50 font-bold gap-2 text-xs shadow-sm">
                               <Plus className="h-3.5 w-3.5" /> Upload Document
                           </Button>
                         </DialogTrigger>
-                        <DialogContent className="sm:max-w-md rounded-[2.5rem] p-0 border-none shadow-2xl">
-                          <DialogHeader className="p-10 bg-gradient-to-br from-indigo-600 to-indigo-700 text-white relative overflow-hidden">
-                             <div className="absolute top-0 right-0 p-8 opacity-10 blur-xl">
-                                <Upload className="h-40 w-40" />
-                             </div>
-                             <DialogTitle className="text-2xl font-bold tracking-tight">Import Record</DialogTitle>
-                             <DialogDescription className="text-indigo-100 font-medium text-sm">
-                                Append diagnostic reports or imaging to patient chart.
-                             </DialogDescription>
-                          </DialogHeader>
-                          <form onSubmit={handleFileUpload} className="p-10 space-y-6 bg-white">
-                            <div className="space-y-4">
-                              <div className="grid gap-2">
-                                <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Document Category</Label>
-                                <Select value={uploadData.file_type} onValueChange={(v) => setUploadData({ ...uploadData, file_type: v })}>
-                                  <SelectTrigger className="h-12 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all font-medium">
-                                    <SelectValue placeholder="Select Type" />
-                                  </SelectTrigger>
-                                  <SelectContent className="rounded-2xl border-slate-100 shadow-xl p-2">
-                                    {['MRI', 'X-Ray', 'CT Scan', 'Blood Test', 'Prescription', 'Other'].map(t => (
-                                      <SelectItem key={t} value={t} className="rounded-xl">{t}</SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div className="grid gap-2">
-                                <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Clinical Notes</Label>
-                                <textarea 
-                                  placeholder="Initial scan observations, diagnosis summary, or details..." 
-                                  className="w-full h-32 p-4 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all font-medium text-sm resize-none outline-none border focus:border-indigo-100"
-                                  value={uploadData.notes}
-                                  onChange={(e) => setUploadData({ ...uploadData, notes: e.target.value })}
-                                />
-                              </div>
-                              <div className="grid gap-2">
-                                <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">File Asset</Label>
-                                <div className="relative">
-                                  <Input 
-                                    type="file" 
-                                    className="hidden" 
-                                    id="file-upload" 
-                                    onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
-                                    accept=".pdf,.jpg,.jpeg,.png"
+                        <DialogContent className="sm:max-w-[95vw] md:max-w-[1000px] max-h-[90vh] p-0 overflow-hidden rounded-[2.5rem] border-none shadow-2xl flex flex-col">
+                           <DialogHeader className="bg-indigo-600 p-8 text-white shrink-0 relative">
+                              <div className="absolute top-8 right-8 flex gap-2">
+                                {[1, 2].map((s) => (
+                                  <div 
+                                    key={s} 
+                                    className={cn(
+                                      "h-1.5 w-8 rounded-full transition-all duration-500",
+                                      uploadStep === s ? "bg-white" : "bg-white/20"
+                                    )} 
                                   />
-                                  <label 
-                                    htmlFor="file-upload" 
-                                    className="flex items-center justify-center w-full h-24 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer group"
-                                  >
-                                    <div className="text-center">
-                                      <Upload className="h-5 w-5 text-slate-400 mx-auto mb-1 group-hover:text-indigo-600 group-hover:scale-110 transition-all" />
-                                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                                        {selectedFile ? selectedFile.name : 'Select PDF or Image'}
-                                      </span>
-                                    </div>
-                                  </label>
-                                </div>
+                                ))}
                               </div>
-                            </div>
-                            <DialogFooter className="pt-4 sm:justify-between flex items-center">
-                              <Button type="button" variant="ghost" className="rounded-2xl h-12 text-slate-400 font-bold uppercase tracking-widest text-[10px]" onClick={() => setIsUploadDialogOpen(false)}>Abort</Button>
-                              <Button type="submit" className="rounded-2xl h-12 px-8 bg-indigo-600 text-white font-bold text-xs uppercase tracking-widest shadow-xl shadow-indigo-100" disabled={isUploading || !selectedFile}>
-                                {isUploading ? 'Uploading...' : 'Finalize Sync'}
-                              </Button>
-                            </DialogFooter>
-                          </form>
+                              <DialogTitle className="text-2xl font-bold tracking-tight">
+                                {uploadStep === 1 ? 'Step 1: Diagnostic Assets' : 'Step 2: Clinical Context'}
+                              </DialogTitle>
+                              <DialogDescription className="text-indigo-100 font-medium text-sm">
+                                 {uploadStep === 1 
+                                   ? 'Upload scans and specify body regions for each asset.' 
+                                   : 'Provide diagnostic summary and clinical observations.'}
+                              </DialogDescription>
+                           </DialogHeader>
+                           
+                           <div className="flex-1 overflow-y-auto bg-white">
+                             {uploadStep === 1 ? (
+                               <div className="p-8 space-y-10">
+                                 <div className="space-y-6">
+                                   <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+                                      <div className="h-5 w-5 rounded bg-indigo-50 flex items-center justify-center">
+                                         <Upload className="h-3 w-3 text-indigo-600" />
+                                      </div>
+                                      <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">File Repository</h3>
+                                   </div>
+                                   
+                                   <div className="relative">
+                                     <Input 
+                                       type="file" 
+                                       className="hidden" 
+                                       id="file-upload" 
+                                       multiple
+                                       onChange={(e) => {
+                                         const newFiles = Array.from(e.target.files || []);
+                                         const newAssets = newFiles.map(file => ({ file, bodyPart: '' }));
+                                         setStagedAssets(prev => [...prev, ...newAssets]);
+                                       }}
+                                       accept=".pdf,.jpg,.jpeg,.png"
+                                     />
+                                     <label 
+                                       htmlFor="file-upload" 
+                                       className="flex items-center justify-center w-full h-32 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer group"
+                                     >
+                                       <div className="text-center">
+                                         <Upload className="h-8 w-8 text-slate-400 mx-auto mb-2 group-hover:text-indigo-600 group-hover:scale-110 transition-all" />
+                                         <p className="text-[11px] font-bold text-slate-600 uppercase tracking-widest">
+                                           Drop scan files here or click to browse
+                                         </p>
+                                         <p className="text-[10px] text-slate-400 mt-1">Multi-file support (PDF, JPG, PNG)</p>
+                                       </div>
+                                     </label>
+                                   </div>
+
+                                   {stagedAssets.length > 0 && (
+                                     <div className="space-y-3">
+                                       <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Staged Assets & Regions</Label>
+                                       <div className="grid grid-cols-1 gap-3 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar">
+                                         {stagedAssets.map((asset, idx) => (
+                                           <div 
+                                             key={idx}
+                                             className="flex flex-col md:flex-row items-start md:items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100"
+                                           >
+                                             <div className="flex items-center gap-3 flex-1 min-w-0 w-full">
+                                               <div className="h-10 w-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center shadow-sm shrink-0">
+                                                 <FileText className="h-5 w-5 text-indigo-500" />
+                                               </div>
+                                               <div className="min-w-0 flex-1">
+                                                 <p className="text-xs font-bold text-slate-700 truncate">{asset.file.name}</p>
+                                                 <p className="text-[10px] text-slate-400 font-medium uppercase tracking-tighter">{(asset.file.size / 1024).toFixed(1)} KB • {asset.file.type.split('/')[1].toUpperCase()}</p>
+                                               </div>
+                                             </div>
+                                             
+                                             <div className="flex items-center gap-3 w-full md:w-auto">
+                                               <Input 
+                                                 placeholder="Body Part (e.g. Chest)" 
+                                                 className="h-10 w-full md:w-48 rounded-xl bg-white border-slate-200 text-xs"
+                                                 value={asset.bodyPart}
+                                                 onChange={(e) => {
+                                                   const newAssets = [...stagedAssets];
+                                                   newAssets[idx].bodyPart = e.target.value;
+                                                   setStagedAssets(newAssets);
+                                                 }}
+                                               />
+                                               <Button 
+                                                 type="button" 
+                                                 variant="ghost" 
+                                                 size="icon" 
+                                                 className="h-10 w-10 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl shrink-0"
+                                                 onClick={() => setStagedAssets(prev => prev.filter((_, i) => i !== idx))}
+                                               >
+                                                 <Trash2 className="h-4 w-4" />
+                                               </Button>
+                                             </div>
+                                           </div>
+                                         ))}
+                                       </div>
+                                     </div>
+                                   )}
+                                 </div>
+
+                                 <div className="space-y-6">
+                                   <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+                                      <div className="h-5 w-5 rounded bg-indigo-50 flex items-center justify-center">
+                                         <FileText className="h-3 w-3 text-indigo-600" />
+                                      </div>
+                                      <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Basic Scan Info</h3>
+                                   </div>
+                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                     <div className="grid gap-2">
+                                       <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Modality</Label>
+                                       <Select value={uploadData.file_type} onValueChange={(v) => setUploadData({ ...uploadData, file_type: v })}>
+                                         <SelectTrigger className="h-11 rounded-xl bg-slate-50 border-slate-100 font-medium">
+                                           <SelectValue />
+                                         </SelectTrigger>
+                                         <SelectContent className="rounded-xl">
+                                           {['X-ray', 'MRI', 'CT Scan', 'Ultrasound', 'Blood Test', 'Other'].map(t => (
+                                             <SelectItem key={t} value={t}>{t}</SelectItem>
+                                           ))}
+                                         </SelectContent>
+                                       </Select>
+                                     </div>
+                                     <div className="grid gap-2">
+                                       <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Scan Date</Label>
+                                       <Input type="date" className="h-11 rounded-xl bg-slate-50 border-slate-100" value={uploadData.scan_date} onChange={(e) => setUploadData({ ...uploadData, scan_date: e.target.value })} />
+                                     </div>
+                                   </div>
+                                 </div>
+                               </div>
+                             ) : (
+                               <div className="p-8 space-y-10">
+                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                   <div className="space-y-6">
+                                      <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+                                         <div className="h-5 w-5 rounded bg-rose-50 flex items-center justify-center">
+                                            <Activity className="h-3 w-3 text-rose-600" />
+                                         </div>
+                                         <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Clinical Context</h3>
+                                      </div>
+                                      <div className="grid gap-4">
+                                        <div className="grid gap-2">
+                                          <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Referring Physician</Label>
+                                          <Select value={uploadData.referring_doctor_id} onValueChange={(v) => setUploadData({ ...uploadData, referring_doctor_id: v })}>
+                                            <SelectTrigger className="h-11 rounded-xl bg-slate-50 border-slate-100 font-medium"><SelectValue placeholder="Select Doctor" /></SelectTrigger>
+                                            <SelectContent className="rounded-xl">
+                                              {doctors.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                                            </SelectContent>
+                                          </Select>
+                                        </div>
+                                        <div className="grid gap-2">
+                                          <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Symptoms</Label>
+                                          <Input placeholder="e.g. Shortness of breath" className="h-11 rounded-xl bg-slate-50 border-slate-100" value={uploadData.symptoms} onChange={(e) => setUploadData({ ...uploadData, symptoms: e.target.value })} />
+                                        </div>
+                                        <div className="grid gap-2">
+                                          <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Medical History</Label>
+                                          <textarea 
+                                            className="w-full h-24 p-4 rounded-xl bg-slate-50 border-slate-100 text-sm resize-none outline-none border focus:ring-2 focus:ring-indigo-100"
+                                            placeholder="e.g. Hypertension, previous surgeries..."
+                                            value={uploadData.clinical_history}
+                                            onChange={(e) => setUploadData({ ...uploadData, clinical_history: e.target.value })}
+                                          />
+                                        </div>
+                                      </div>
+                                   </div>
+
+                                   <div className="space-y-6">
+                                      <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+                                         <div className="h-5 w-5 rounded bg-amber-50 flex items-center justify-center">
+                                            <ClipboardList className="h-3 w-3 text-amber-600" />
+                                         </div>
+                                         <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Radiology Report</h3>
+                                      </div>
+                                      <div className="grid gap-4">
+                                        <div className="grid gap-2">
+                                          <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Detailed Findings</Label>
+                                          <textarea 
+                                            className="w-full h-24 p-4 rounded-xl bg-slate-50 border-slate-100 text-sm resize-none outline-none border focus:ring-2 focus:ring-indigo-100"
+                                            placeholder="Objective observations..."
+                                            value={uploadData.findings}
+                                            onChange={(e) => setUploadData({ ...uploadData, findings: e.target.value })}
+                                          />
+                                        </div>
+                                        <div className="grid gap-2">
+                                          <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Clinical Impression</Label>
+                                          <textarea 
+                                            className="w-full h-24 p-4 rounded-xl bg-slate-50 border-slate-100 text-sm resize-none outline-none border focus:ring-2 focus:ring-indigo-100"
+                                            placeholder="Diagnostic summary..."
+                                            value={uploadData.impression}
+                                            onChange={(e) => setUploadData({ ...uploadData, impression: e.target.value })}
+                                          />
+                                        </div>
+                                      </div>
+                                   </div>
+                                 </div>
+                               </div>
+                             )}
+                           </div>
+                           
+                           <div className="p-8 bg-slate-50 border-t border-slate-100 flex items-center justify-between shrink-0">
+                             {uploadStep === 1 ? (
+                               <>
+                                 <Button variant="ghost" className="rounded-xl h-12 px-6 font-bold uppercase tracking-widest text-[10px]" onClick={() => setIsUploadDialogOpen(false)}>Cancel</Button>
+                                 <Button 
+                                   className="rounded-xl h-12 px-10 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-widest shadow-xl shadow-indigo-100" 
+                                   disabled={stagedAssets.length === 0}
+                                   onClick={() => setUploadStep(2)}
+                                 >
+                                   Next: Clinical Context <ChevronRight className="ml-2 h-4 w-4" />
+                                 </Button>
+                               </>
+                             ) : (
+                               <>
+                                 <Button variant="ghost" className="rounded-xl h-12 px-6 font-bold uppercase tracking-widest text-[10px]" onClick={() => setUploadStep(1)}><ChevronLeft className="mr-2 h-4 w-4" /> Back</Button>
+                                 <Button 
+                                   className="rounded-xl h-12 px-10 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs uppercase tracking-widest shadow-xl shadow-emerald-100" 
+                                   disabled={isUploading}
+                                   onClick={handleFileUpload}
+                                 >
+                                   {isUploading ? 'Synchronizing...' : 'Finalize & Submit'}
+                                 </Button>
+                               </>
+                             )}
+                           </div>
                         </DialogContent>
                      </Dialog>
+
                   </div>
                 </div>
-
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                   {filteredDocs.map((doc, i) => (
-                     <Card key={doc.id} className="group border border-slate-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all hover:-translate-y-1 cursor-pointer bg-white" onClick={() => setSelectedDoc(doc)}>
-                        <div className="aspect-[4/3] relative overflow-hidden bg-slate-50 border-b border-slate-100 flex items-center justify-center">
-                            {doc.fileUrl.match(/\.(jpg|jpeg|png|gif)$/i) ? (
-                              <img src={doc.fileUrl} alt={doc.type} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
-                            ) : (
-                              <FileText className="h-16 w-16 text-indigo-100 group-hover:scale-110 transition-transform duration-700" />
-                            )}
-                            <div className="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/20 transition-colors" />
-                            <Badge className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm text-slate-800 border-none text-[9px] font-bold uppercase shadow-sm tracking-tight h-5">
-                                DOC-{doc.id.slice(-4).toUpperCase()}
-                            </Badge>
-                            <Button variant="secondary" className="absolute inset-0 m-auto h-10 w-10 rounded-full bg-white opacity-0 group-hover:opacity-100 scale-75 group-hover:scale-100 transition-all shadow-xl flex items-center justify-center p-0">
-                                <Eye className="h-5 w-5 text-indigo-600" />
-                            </Button>
-                         </div>
-                         <CardHeader className="p-4 space-y-1.5 flex-1">
-                            <div className="flex items-center justify-between">
-                              <CardTitle className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors leading-none">{doc.type}</CardTitle>
-                              <Badge variant="ghost" className="text-[10px] text-slate-400 p-0 font-bold uppercase tracking-widest h-auto leading-none">{new Date(doc.uploadDate).toLocaleDateString()}</Badge>
-                            </div>
-                            <div className="flex items-center gap-2">
-                               <TagIcon className="h-3 w-3 text-slate-300" />
-                               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter truncate max-w-[200px]">{doc.fileName}</p>
-                            </div>
-                         </CardHeader>
-                         <CardFooter className="px-4 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Verified Record</span>
-                            <div className="flex gap-1 opacity-40 group-hover:opacity-100 transition-opacity">
-                               <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-500 hover:text-indigo-600 hover:bg-white rounded" onClick={(e) => {e.stopPropagation(); window.open(doc.fileUrl);}}><Download className="h-3.5 w-3.5" /></Button>
-                               <Button variant="ghost" size="icon" className="h-7 w-7 text-rose-400 hover:text-rose-600 hover:bg-white rounded" onClick={(e) => {e.stopPropagation(); deleteDocument(doc.id);}}><Trash2 className="h-3.5 w-3.5" /></Button>
-                            </div>
-                         </CardFooter>
-                     </Card>
-                   ))}
+                    {filteredStudies.map((study, i) => {
+                      const firstImage = study.files.find(f => f.fileFormat?.match(/(jpg|jpeg|png|gif)/i));
+                     return (
+                       <Card key={study.id} className="group border border-slate-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all hover:-translate-y-1 cursor-pointer bg-white" onClick={() => {setSelectedStudy(study); setActiveFileIndex(0);}}>
+                          <div className="aspect-[4/3] relative overflow-hidden bg-slate-50 border-b border-slate-100 flex items-center justify-center">
+                              {firstImage ? (
+                                <img src={firstImage.fileUrl} alt={study.studyType} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                              ) : (
+                                <FileText className="h-16 w-16 text-indigo-100 group-hover:scale-110 transition-transform duration-700" />
+                              )}
+                              <div className="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/20 transition-colors" />
+                              <Badge className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm text-slate-800 border-none text-[9px] font-bold uppercase shadow-sm tracking-tight h-5">
+                                  STUDY-{study.id.slice(-4).toUpperCase()}
+                              </Badge>
+                              <Badge className="absolute top-3 right-3 bg-indigo-600 text-white border-none text-[9px] font-bold uppercase shadow-sm tracking-tight h-5">
+                                  {study.files.length} FILES
+                              </Badge>
+                              <Button variant="secondary" className="absolute inset-0 m-auto h-10 w-10 rounded-full bg-white opacity-0 group-hover:opacity-100 scale-75 group-hover:scale-100 transition-all shadow-xl flex items-center justify-center p-0">
+                                  <Eye className="h-5 w-5 text-indigo-600" />
+                              </Button>
+                           </div>
+                           <CardHeader className="p-4 space-y-1.5 flex-1">
+                              <div className="flex items-center justify-between">
+                                <CardTitle className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors leading-none">{study.studyType}</CardTitle>
+                                <Badge variant="ghost" className="text-[10px] text-slate-400 p-0 font-bold uppercase tracking-widest h-auto leading-none">{new Date(study.createdAt).toLocaleDateString()}</Badge>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                 <Activity className="h-3 w-3 text-slate-300" />
+                                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter truncate max-w-[200px]">{study.bodyPart || 'General Assessment'}</p>
+                              </div>
+                           </CardHeader>
+                           <CardFooter className="px-4 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Diagnostic Study</span>
+                              <div className="flex gap-1 opacity-40 group-hover:opacity-100 transition-opacity">
+                                 <Button variant="ghost" size="icon" className="h-7 w-7 text-rose-400 hover:text-rose-600 hover:bg-white rounded" onClick={(e) => {e.stopPropagation(); deleteStudy(study.id);}}><Trash2 className="h-3.5 w-3.5" /></Button>
+                              </div>
+                           </CardFooter>
+                       </Card>
+                     );
+                   })}
                    
                    <Card className="border-2 border-dashed border-slate-200 rounded-xl bg-slate-50/50 hover:bg-slate-50 hover:border-slate-300 transition-all cursor-pointer flex flex-col items-center justify-center py-12 px-6 group" onClick={() => setIsUploadDialogOpen(true)}>
                       <div className="h-12 w-12 rounded-full bg-white flex items-center justify-center shadow-sm mb-4 border border-slate-100 group-hover:scale-110 transition-transform">
-                        <Upload className="h-6 w-6 text-slate-400 group-hover:text-indigo-600" />
+                        <Plus className="h-6 w-6 text-slate-400 group-hover:text-indigo-600" />
                       </div>
-                      <h4 className="text-sm font-bold text-slate-600">New Clinical Record</h4>
-                      <p className="text-[11px] text-slate-400 text-center mt-1">Append PDF, MRI scans or Lab reports to patient chart.</p>
+                      <h4 className="text-sm font-bold text-slate-600">New Diagnostic Study</h4>
+                      <p className="text-[11px] text-slate-400 text-center mt-1">Upload multiple scans and reports for a single study.</p>
                    </Card>
                 </div>
 
-                {filteredDocs.length === 0 && searchTerm && (
+                {filteredStudies.length === 0 && searchTerm && (
                   <div className="py-20 text-center">
                     <p className="text-slate-400 text-sm">No records matching "{searchTerm}" found.</p>
                     <Button variant="link" className="text-indigo-600 text-xs font-bold" onClick={() => setSearchTerm('')}>Reset and Show All</Button>
@@ -689,8 +887,11 @@ const PatientDetail = () => {
                           break;
                         case 'document_uploaded':
                           icon = <Files className="h-4 w-4" />;
-                          title = "Document Uploaded";
-                          desc = `${event.data.file_type}: ${event.data.file_name}`;
+                          title = `${event.data.file_type} Uploaded`;
+                          if (event.data.body_part) title += ` (${event.data.body_part})`;
+                          desc = event.data.impression 
+                            ? `Impression: ${event.data.impression}`
+                            : `New clinical record: ${event.data.file_name}`;
                           colorClass = "text-amber-600";
                           bgClass = "bg-amber-50 border-amber-100";
                           break;
@@ -750,7 +951,7 @@ const PatientDetail = () => {
       </div>
 
       {/* Document Detail Viewer - Redesigned to match reference */}
-      <Dialog open={!!selectedDoc} onOpenChange={() => setSelectedDoc(null)}>
+      <Dialog open={!!selectedStudy} onOpenChange={() => setSelectedStudy(null)}>
         <DialogContent className="sm:max-w-[95vw] md:max-w-[1400px] h-[90vh] rounded-[2.5rem] p-0 border-none shadow-2xl flex flex-col overflow-hidden bg-[#F8FAFC]">
           {/* Visually hidden title/description for screen reader accessibility */}
           <DialogTitle className="sr-only">Clinical Diagnostic Workspace</DialogTitle>
@@ -759,12 +960,12 @@ const PatientDetail = () => {
           <div className="h-20 bg-white border-b border-slate-100 flex items-center justify-between px-10 shrink-0">
              <div className="flex items-center gap-4">
                 <div className="h-10 w-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-100">
-                   <Files className="h-5 w-5" />
+                   <Activity className="h-5 w-5" />
                 </div>
                 <div>
-                   <h2 className="text-sm font-bold text-slate-900 tracking-tight leading-none mb-1">Clinical Diagnostic Workspace</h2>
+                   <h2 className="text-sm font-bold text-slate-900 tracking-tight leading-none mb-1">{selectedStudy?.studyType} Diagnostic Workspace</h2>
                    <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest leading-none">
-                     DOC-{selectedDoc?.id?.slice(-4).toUpperCase()} • {patientDocs.length} RECORDS
+                     STUDY-{selectedStudy?.id?.slice(-4).toUpperCase()} • {selectedStudy?.files.length} CLINICAL ASSETS
                    </p>
                 </div>
              </div>
@@ -774,7 +975,7 @@ const PatientDetail = () => {
                    <ShieldCheck className="h-4 w-4 text-slate-400" />
                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.15em]">Enterprise Secured</span>
                 </div>
-                <Button variant="ghost" size="icon" className="h-10 w-10 text-slate-300 hover:text-slate-600 rounded-full" onClick={() => setSelectedDoc(null)}>
+                <Button variant="ghost" size="icon" className="h-10 w-10 text-slate-300 hover:text-slate-600 rounded-full" onClick={() => setSelectedStudy(null)}>
                    <ArrowLeft className="h-5 w-5" />
                 </Button>
              </div>
@@ -787,7 +988,7 @@ const PatientDetail = () => {
                <div className="h-14 bg-slate-50/50 border-b border-slate-50 px-6 flex items-center justify-between shrink-0">
                   <div className="flex items-center gap-3">
                      <FileText className="h-4 w-4 text-indigo-500" />
-                     <span className="text-xs font-bold text-slate-600 truncate max-w-[200px]">{selectedDoc?.fileName}</span>
+                     <span className="text-xs font-bold text-slate-600 truncate max-w-[200px]">{selectedStudy?.files[activeFileIndex]?.fileName}</span>
                   </div>
                   
                   <div className="flex items-center gap-6">
@@ -799,11 +1000,29 @@ const PatientDetail = () => {
                      
                      <div className="flex items-center gap-3">
                         <div className="flex items-center gap-2 bg-white border border-slate-100 rounded-lg px-3 py-1">
-                           <Button variant="ghost" size="icon" className="h-5 w-5 text-slate-300"><ChevronLeft className="h-3.5 w-3.5" /></Button>
-                           <span className="text-[10px] font-bold text-slate-400">1/1</span>
-                           <Button variant="ghost" size="icon" className="h-5 w-5 text-slate-300"><ChevronRight className="h-3.5 w-3.5" /></Button>
+                           <Button 
+                             variant="ghost" 
+                             size="icon" 
+                             className="h-5 w-5 text-slate-300"
+                             disabled={activeFileIndex === 0}
+                             onClick={() => setActiveFileIndex(prev => Math.max(0, prev - 1))}
+                           >
+                             <ChevronLeft className="h-3.5 w-3.5" />
+                           </Button>
+                           <span className="text-[10px] font-bold text-slate-400">{activeFileIndex + 1}/{selectedStudy?.files.length}</span>
+                           <Button 
+                             variant="ghost" 
+                             size="icon" 
+                             className="h-5 w-5 text-slate-300"
+                             disabled={activeFileIndex === (selectedStudy?.files.length || 1) - 1}
+                             onClick={() => setActiveFileIndex(prev => Math.min((selectedStudy?.files.length || 1) - 1, prev + 1))}
+                           >
+                             <ChevronRight className="h-3.5 w-3.5" />
+                           </Button>
                         </div>
-                        <Button variant="secondary" size="icon" className="h-8 w-8 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100"><Download className="h-4 w-4" /></Button>
+                        <Button variant="secondary" size="icon" className="h-8 w-8 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100" onClick={() => window.open(selectedStudy?.files[activeFileIndex]?.fileUrl)}>
+                          <Download className="h-4 w-4" />
+                        </Button>
                         <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-slate-400 hover:text-slate-600"><Share2 className="h-4 w-4" /></Button>
                      </div>
                   </div>
@@ -811,116 +1030,170 @@ const PatientDetail = () => {
 
                {/* Document Display Area */}
                <div className="flex-1 bg-[#475569] p-8 flex items-center justify-center overflow-auto scrollbar-hide">
-                  <div className="w-full max-w-4xl bg-white shadow-[0_40px_100px_-20px_rgba(0,0,0,0.5)] rounded-sm overflow-hidden min-h-[80%]">
-                    {selectedDoc?.fileUrl?.toLowerCase().endsWith('.pdf') ? (
-                      <iframe src={`${selectedDoc.fileUrl}#toolbar=0`} className="w-full h-[1200px] border-none" />
+                  <div className="w-full max-w-4xl bg-white shadow-[0_40px_100px_-20px_rgba(0,0,0,0.5)] rounded-sm overflow-hidden min-h-[80%] flex items-center justify-center">
+                    {selectedStudy?.files[activeFileIndex]?.fileFormat === 'pdf' ? (
+                      <iframe src={`${selectedStudy.files[activeFileIndex].fileUrl}#toolbar=0`} className="w-full h-[1200px] border-none" />
                     ) : (
-                      <img src={selectedDoc?.fileUrl} className="w-full h-auto" alt="Clinical Document" />
+                      <img src={selectedStudy?.files[activeFileIndex]?.fileUrl} className="max-w-full max-h-full object-contain" alt="Study Asset" />
                     )}
                   </div>
                </div>
             </div>
 
-            {/* Right Column: Sidebar - Scrollable for smaller screens */}
-            <div className="w-full md:w-[400px] flex flex-col gap-6 overflow-y-auto scrollbar-hide pr-2">
-               {/* Metadata Section */}
-               <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-8 flex flex-col gap-8 shrink-0">
+            <div className="w-full md:w-[450px] flex flex-col gap-6 overflow-y-auto scrollbar-hide pr-2">
+               {/* Study Details Section */}
+               <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-8 flex flex-col gap-6 shrink-0">
                   <div className="flex items-center gap-3">
                      <div className="h-5 w-5 rounded-full bg-indigo-50 flex items-center justify-center">
                         <Activity className="h-3 w-3 text-indigo-600" />
                      </div>
-                     <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Diagnostic Details</h3>
+                     <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Study Parameters</h3>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-y-8 gap-x-12">
-                     <div className="space-y-1.5">
-                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">Diagnostic ID</p>
-                        <p className="text-xs font-bold text-slate-900">DOC-{selectedDoc?.id?.slice(-4).toUpperCase()}</p>
+                  <div className="grid grid-cols-2 gap-y-6 gap-x-8">
+                     <div className="space-y-1">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">Accession Number</p>
+                        <p className="text-xs font-bold text-slate-900">STUDY-{selectedStudy?.id?.slice(-4).toUpperCase()}</p>
                      </div>
-                     <div className="space-y-1.5">
-                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">Entry Date</p>
-                        <p className="text-xs font-bold text-slate-900">{selectedDoc && new Date(selectedDoc.uploadDate).toLocaleDateString()}</p>
+                     <div className="space-y-1">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">Scan Date</p>
+                        <p className="text-xs font-bold text-slate-900">{selectedStudy?.scanDate ? new Date(selectedStudy.scanDate).toLocaleDateString() : 'N/A'}</p>
                      </div>
-                     <div className="space-y-1.5">
-                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">Patient MRN</p>
-                        <p className="text-xs font-bold text-slate-900">{patient.mrn}</p>
+                     <div className="space-y-1">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">Modality</p>
+                        <p className="text-xs font-bold text-slate-900 truncate">{selectedStudy?.studyType}</p>
                      </div>
-                     <div className="space-y-1.5">
-                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">Record Type</p>
-                        <p className="text-xs font-bold text-slate-900 truncate">{selectedDoc?.type}</p>
+                     <div className="space-y-1">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">Anatomical Region</p>
+                        <p className="text-xs font-bold text-slate-900">{selectedStudy?.bodyPart || 'N/A'}</p>
                      </div>
-                     <div className="space-y-1.5">
-                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">Dept Scope</p>
-                        <p className="text-xs font-bold text-slate-900">Diagnostics</p>
-                     </div>
-                     <div className="space-y-1.5">
-                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">Sync Agent</p>
-                        <p className="text-xs font-bold text-indigo-600">{uploaderDoc?.name?.split(' ')[0] || 'Medical'}</p>
-                     </div>
-                  </div>
-               </div>
-
-               {/* Care Observations Section */}
-               <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-8 flex flex-col gap-4 shrink-0">
-                  <div className="flex items-center gap-3">
-                     <div className="h-5 w-5 rounded-full bg-emerald-50 flex items-center justify-center">
-                        <ClipboardList className="h-3 w-3 text-emerald-600" />
-                     </div>
-                     <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Care Observations</h3>
-                  </div>
-                  <div className="space-y-2">
-                     <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">Collaboration logs and patient notes</p>
-                     <div className="p-4 bg-slate-50/50 rounded-2xl border border-slate-100 min-h-[80px]">
-                        <p className="text-xs text-slate-600 leading-relaxed italic font-medium">
-                          "{selectedDoc?.notes || 'No specific clinical observations were recorded for this document bundle.'}"
+                     <div className="space-y-1">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">Referring MD</p>
+                        <p className="text-xs font-bold text-indigo-600 truncate">
+                          {doctors.find(d => d.id === selectedStudy?.referringDoctorId)?.name || 'N/A'}
                         </p>
                      </div>
+                     <div className="space-y-1">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">Radiologist</p>
+                        <p className="text-xs font-bold text-slate-700">{uploaderDoc?.name?.split(' ')[0] || 'System'}</p>
+                     </div>
                   </div>
                </div>
 
-               {/* All Documents Section */}
+               {/* Radiology Report Section */}
+               {(selectedStudy?.findings || selectedStudy?.impression) && (
+                 <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-8 flex flex-col gap-6 shrink-0">
+                    <div className="flex items-center gap-3">
+                       <div className="h-5 w-5 rounded-full bg-amber-50 flex items-center justify-center">
+                          <ClipboardList className="h-3 w-3 text-amber-600" />
+                       </div>
+                       <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Radiology Report</h3>
+                    </div>
+                    
+                    <div className="space-y-4">
+                       {selectedStudy?.findings && (
+                         <div className="space-y-2">
+                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">Findings</p>
+                            <div className="p-4 bg-slate-50/50 rounded-2xl border border-slate-100">
+                               <p className="text-xs text-slate-600 leading-relaxed font-medium whitespace-pre-wrap">
+                                 {selectedStudy.findings}
+                               </p>
+                            </div>
+                         </div>
+                       )}
+                       {selectedStudy?.impression && (
+                         <div className="space-y-2">
+                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">Impression</p>
+                            <div className="p-4 bg-indigo-50/30 rounded-2xl border border-indigo-100">
+                               <p className="text-xs text-slate-900 leading-relaxed font-bold whitespace-pre-wrap">
+                                 {selectedStudy.impression}
+                               </p>
+                            </div>
+                         </div>
+                       )}
+                    </div>
+                 </div>
+               )}
+
+               {/* Multi-File Thumbnail Gallery */}
                <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-8 flex flex-col shrink-0">
                   <div className="flex items-center justify-between mb-5">
-                     <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">All Documents</h3>
-                     <span className="text-[9px] font-bold text-slate-300 uppercase tracking-widest">{patientDocs.length} files</span>
+                     <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Study Gallery</h3>
+                     <span className="text-[9px] font-bold text-slate-300 uppercase tracking-widest">{selectedStudy?.files.length} Assets</span>
                   </div>
 
-                  <div className="space-y-2 max-h-[280px] overflow-y-auto pr-1 scrollbar-hide">
-                     {patientDocs.map((doc) => (
+                  <div className="grid grid-cols-2 gap-3">
+                     {selectedStudy?.files.map((file, idx) => (
                         <div 
-                          key={doc.id} 
+                          key={file.id} 
                           className={cn(
-                            "group p-3 rounded-2xl border transition-all cursor-pointer flex items-center gap-3",
-                            doc.id === selectedDoc?.id ? "bg-indigo-50/50 border-indigo-100" : "bg-white border-slate-50 hover:border-slate-200"
+                            "group aspect-square rounded-2xl border transition-all cursor-pointer overflow-hidden relative",
+                            idx === activeFileIndex ? "border-indigo-600 ring-2 ring-indigo-100" : "border-slate-100 hover:border-slate-300"
                           )}
-                          onClick={() => setSelectedDoc(doc)}
+                          onClick={() => setActiveFileIndex(idx)}
                         >
-                           <div className={cn(
-                              "h-9 w-9 rounded-xl flex items-center justify-center border shrink-0",
-                              doc.id === selectedDoc?.id
-                                ? "bg-indigo-600 border-indigo-600 text-white"
-                                : "bg-slate-100 border-slate-100 text-slate-400 group-hover:bg-white group-hover:text-indigo-600"
-                           )}>
-                              <FileText className="h-4 w-4" />
-                           </div>
-                           <div className="min-w-0 flex-1">
-                              <p className={cn("text-[11px] font-bold truncate", doc.id === selectedDoc?.id ? "text-indigo-700" : "text-slate-900")}>{doc.fileName}</p>
-                              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter mt-0.5">{doc.type} • {new Date(doc.uploadDate).toLocaleDateString()}</p>
-                           </div>
-                           {doc.id === selectedDoc?.id && (
-                             <div className="h-2 w-2 rounded-full bg-indigo-500 shrink-0" />
+                           {file.fileFormat?.match(/(jpg|jpeg|png)/i) ? (
+                             <img src={file.fileUrl} className="w-full h-full object-cover" alt="Thumb" />
+                           ) : (
+                             <div className="w-full h-full bg-slate-50 flex items-center justify-center">
+                               <FileText className="h-8 w-8 text-slate-300" />
+                             </div>
                            )}
-                           <div className={cn("flex gap-1 transition-opacity", doc.id === selectedDoc?.id ? "opacity-100" : "opacity-0 group-hover:opacity-100")}>
-                              <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-lg"><Download className="h-3.5 w-3.5" /></Button>
-                              <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-300 hover:text-rose-500 hover:bg-white rounded-lg" onClick={(e) => {e.stopPropagation(); deleteDocument(doc.id);}}><Trash2 className="h-3.5 w-3.5" /></Button>
+                           <div className="absolute bottom-0 inset-x-0 p-2 bg-gradient-to-t from-black/80 to-transparent">
+                             <p className="text-[8px] font-bold text-white truncate uppercase tracking-tighter">{file.fileName}</p>
                            </div>
                         </div>
                      ))}
                   </div>
+               </div>
+
+               {/* Clinical Context Section */}
+               <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-8 flex flex-col gap-6 shrink-0 mb-6">
+                  <div className="flex items-center gap-3">
+                     <div className="h-5 w-5 rounded-full bg-rose-50 flex items-center justify-center">
+                        <Stethoscope className="h-3 w-3 text-rose-600" />
+                     </div>
+                     <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Clinical Context</h3>
+                  </div>
+                  
+                  <div className="space-y-4">
+                     {selectedStudy?.symptoms && (
+                       <div className="flex justify-between items-start gap-4">
+                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none mt-1 shrink-0">Symptoms</p>
+                          <p className="text-xs font-medium text-slate-700 text-right">{selectedStudy.symptoms}</p>
+                       </div>
+                     )}
+                     {selectedStudy?.reasonForScan && (
+                       <div className="flex justify-between items-start gap-4">
+                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none mt-1 shrink-0">Indication</p>
+                          <p className="text-xs font-medium text-slate-700 text-right">{selectedStudy.reasonForScan}</p>
+                       </div>
+                     )}
+                     {selectedStudy?.clinicalHistory && (
+                       <div className="space-y-2">
+                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">History</p>
+                          <div className="p-4 bg-slate-50/50 rounded-2xl border border-slate-100">
+                             <p className="text-xs text-slate-600 leading-relaxed font-medium italic">
+                               {selectedStudy.clinicalHistory}
+                             </p>
+                          </div>
+                       </div>
+                     )}
+                     {selectedStudy?.doctorNotes && (
+                       <div className="space-y-2">
+                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">MD Annotations</p>
+                          <div className="p-4 bg-emerald-50/30 rounded-2xl border border-emerald-100">
+                             <p className="text-xs text-emerald-800 leading-relaxed font-medium">
+                               {selectedStudy.doctorNotes}
+                             </p>
+                          </div>
+                       </div>
+                     )}
                   </div>
                </div>
             </div>
-         </DialogContent>
+          </div>
+        </DialogContent>
       </Dialog>
     </motion.div>
   );

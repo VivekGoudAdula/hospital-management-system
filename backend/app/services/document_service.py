@@ -10,7 +10,24 @@ class DocumentService:
     def __init__(self):
         self.collection_name = "documents"
 
-    async def upload_document(self, patient_id: str, file_type: str, notes: str, file: UploadFile, user_id: str) -> Dict[str, Any]:
+    async def upload_document(
+        self, 
+        patient_id: str, 
+        file_type: str, 
+        notes: str, 
+        file: UploadFile, 
+        user_id: str,
+        scan_date: str = None,
+        body_part: str = None,
+        department: str = None,
+        referring_doctor_id: str = None,
+        findings: str = None,
+        impression: str = None,
+        symptoms: str = None,
+        clinical_history: str = None,
+        reason_for_scan: str = None,
+        doctor_notes: str = None
+    ) -> Dict[str, Any]:
         db = get_database()
         
         # Verify patient exists
@@ -27,6 +44,16 @@ class DocumentService:
             "file_name": file.filename,
             "file_type": file_type,
             "notes": notes,
+            "scan_date": datetime.fromisoformat(scan_date.replace('Z', '+00:00')) if scan_date else None,
+            "body_part": body_part,
+            "department": department,
+            "referring_doctor_id": ObjectId(referring_doctor_id) if referring_doctor_id else None,
+            "findings": findings,
+            "impression": impression,
+            "symptoms": symptoms,
+            "clinical_history": clinical_history,
+            "reason_for_scan": reason_for_scan,
+            "doctor_notes": doctor_notes,
             "uploaded_by": ObjectId(user_id),
             "created_at": datetime.utcnow()
         }
@@ -35,9 +62,12 @@ class DocumentService:
         document_dict["id"] = str(result.inserted_id)
         document_dict["patient_id"] = str(document_dict["patient_id"])
         document_dict["uploaded_by"] = str(document_dict["uploaded_by"])
+        if document_dict.get("referring_doctor_id"):
+            document_dict["referring_doctor_id"] = str(document_dict["referring_doctor_id"])
         del document_dict["_id"]
         
         return document_dict
+
 
     async def get_patient_documents(self, patient_id: str) -> List[Dict[str, Any]]:
         db = get_database()
@@ -171,18 +201,79 @@ class DocumentService:
             }
         })
         
-        # 8. Fetch results and sort in memory (Cosmos DB compatibility)
-        results = await db[self.collection_name].aggregate(pipeline).to_list(1000)
+        # 8. Fetch individual document results
+        doc_results = await db[self.collection_name].aggregate(pipeline).to_list(1000)
+        
+        # 9. Fetch studies and merge
+        study_pipeline = []
+        
+        # Map match_doc filters to studies (file_type -> study_type)
+        match_study = {}
+        if file_type and file_type != "all":
+            match_study["study_type"] = file_type
+        if date_query:
+            match_study["created_at"] = date_query
+            
+        if match_study:
+            study_pipeline.append({"$match": match_study})
+        study_pipeline.append({
+            "$lookup": {
+                "from": "patients",
+                "localField": "patient_id",
+                "foreignField": "_id",
+                "as": "patient"
+            }
+        })
+        study_pipeline.append({"$unwind": "$patient"})
+        study_pipeline.append({
+            "$lookup": {
+                "from": "study_files",
+                "localField": "_id",
+                "foreignField": "study_id",
+                "as": "files"
+            }
+        })
+        study_pipeline.append({
+            "$group": {
+                "_id": "$patient_id",
+                "patient_name": {"$first": "$patient.full_name"},
+                "mrn": {"$first": "$patient.mrn"},
+                "department": {"$first": "General"},
+                "document_types": {"$addToSet": "$study_type"},
+                "files_count": {"$sum": {"$size": "$files"}},
+                "latest_activity": {"$max": "$created_at"}
+            }
+        })
+        
+        study_results = await db.document_studies.aggregate(study_pipeline).to_list(1000)
+        
+        # Merge results
+        merged_map = {}
+        for item in doc_results:
+            pid = str(item["_id"])
+            merged_map[pid] = item
+            
+        for item in study_results:
+            pid = str(item["_id"])
+            if pid in merged_map:
+                merged_map[pid]["document_types"] = list(set(merged_map[pid]["document_types"] + item["document_types"]))
+                merged_map[pid]["files_count"] += item["files_count"]
+                if item["latest_activity"] > merged_map[pid]["latest_activity"]:
+                    merged_map[pid]["latest_activity"] = item["latest_activity"]
+            else:
+                merged_map[pid] = item
+        
+        results = list(merged_map.values())
         results.sort(key=lambda x: x.get("latest_activity", datetime.min), reverse=True)
         
-        # 9. Format response and generate app_id
+        # 10. Format response
         formatted_data = []
         for index, item in enumerate(results):
             formatted_data.append({
                 "app_id": f"APP-{str(index + 1).zfill(3)}",
                 "patient_name": item["patient_name"],
                 "mrn": item["mrn"],
-                "department": item["department"],
+                "department": item.get("department", "General"),
                 "document_types": item["document_types"],
                 "files_count": item["files_count"],
                 "latest_activity": item["latest_activity"],
@@ -212,5 +303,222 @@ class DocumentService:
         await db[self.collection_name].delete_one({"_id": ObjectId(document_id)})
         
         return {"message": "Document deleted successfully"}
+
+
+    async def upload_study(
+        self,
+        patient_id: str,
+        study_type: str,
+        files: List[UploadFile],
+        user_id: str,
+        scan_date: str = None,
+        body_part: str = None,
+        department: str = None,
+        referring_doctor_id: str = None,
+        findings: str = None,
+        impression: str = None,
+        symptoms: str = None,
+        clinical_history: str = None,
+        reason_for_scan: str = None,
+        doctor_notes: str = None
+    ) -> Dict[str, Any]:
+        db = get_database()
+        
+        # Verify patient exists
+        patient = await db.patients.find_one({"_id": ObjectId(patient_id)})
+        if not patient:
+            raise HTTPException(status_code=404, detail="Patient not found")
+            
+        # 1. Create Document Study
+        study_dict = {
+            "patient_id": ObjectId(patient_id),
+            "study_type": study_type,
+            "body_part": body_part,
+            "scan_date": datetime.fromisoformat(scan_date.replace('Z', '+00:00')) if scan_date else None,
+            "department": department,
+            "referring_doctor_id": ObjectId(referring_doctor_id) if referring_doctor_id else None,
+            "findings": findings,
+            "impression": impression,
+            "symptoms": symptoms,
+            "clinical_history": clinical_history,
+            "reason_for_scan": reason_for_scan,
+            "doctor_notes": doctor_notes,
+            "uploaded_by": ObjectId(user_id),
+            "file_count": len(files),
+            "created_at": datetime.utcnow()
+        }
+        
+        study_result = await db.document_studies.insert_one(study_dict)
+        study_id = study_result.inserted_id
+        
+        # 2. Upload and record files
+        recorded_files = []
+        for file in files:
+            file_url = await save_upload_file(file)
+            file_format = file.filename.split('.')[-1].lower() if '.' in file.filename else 'unknown'
+            
+            file_dict = {
+                "study_id": study_id,
+                "file_url": file_url,
+                "file_name": file.filename,
+                "file_format": file_format,
+                "created_at": datetime.utcnow()
+            }
+            file_result = await db.study_files.insert_one(file_dict)
+            file_dict["id"] = str(file_result.inserted_id)
+            file_dict["study_id"] = str(file_dict["study_id"])
+            del file_dict["_id"]
+            recorded_files.append(file_dict)
+            
+        study_dict["id"] = str(study_id)
+        study_dict["patient_id"] = str(study_dict["patient_id"])
+        study_dict["uploaded_by"] = str(study_dict["uploaded_by"])
+        if study_dict.get("referring_doctor_id"):
+            study_dict["referring_doctor_id"] = str(study_dict["referring_doctor_id"])
+        del study_dict["_id"]
+        study_dict["files"] = recorded_files
+        
+        return study_dict
+
+    async def get_patient_studies(self, patient_id: str) -> List[Dict[str, Any]]:
+        db = get_database()
+        studies = await db.document_studies.find({"patient_id": ObjectId(patient_id)}).to_list(100)
+        
+        for study in studies:
+            study["id"] = str(study["_id"])
+            study["patient_id"] = str(study["patient_id"])
+            study["uploaded_by"] = str(study["uploaded_by"])
+            if study.get("referring_doctor_id"):
+                study["referring_doctor_id"] = str(study["referring_doctor_id"])
+            del study["_id"]
+            
+            # Fetch files for this study
+            files = await db.study_files.find({"study_id": ObjectId(study["id"])}).to_list(100)
+            for file in files:
+                file["id"] = str(file["_id"])
+                file["study_id"] = str(file["study_id"])
+                del file["_id"]
+                
+                # Normalize URL
+                raw_url = file.get("file_url", "")
+                filename = os.path.basename(raw_url.replace("\\", "/"))
+                file["file_url"] = f"/uploads/{filename}" if filename else raw_url
+                
+            study["files"] = files
+            
+        # Sort by scan_date or created_at
+        studies.sort(key=lambda x: x.get("scan_date") or x.get("created_at") or datetime.min, reverse=True)
+        return studies
+
+    async def get_study_by_id(self, study_id: str) -> Dict[str, Any]:
+        db = get_database()
+        study = await db.document_studies.find_one({"_id": ObjectId(study_id)})
+        if not study:
+            raise HTTPException(status_code=404, detail="Study not found")
+            
+        study["id"] = str(study["_id"])
+        study["patient_id"] = str(study["patient_id"])
+        study["uploaded_by"] = str(study["uploaded_by"])
+        if study.get("referring_doctor_id"):
+            study["referring_doctor_id"] = str(study["referring_doctor_id"])
+        del study["_id"]
+        
+        files = await db.study_files.find({"study_id": ObjectId(study_id)}).to_list(100)
+        for file in files:
+            file["id"] = str(file["_id"])
+            file["study_id"] = str(file["study_id"])
+            del file["_id"]
+            
+            # Normalize URL
+            raw_url = file.get("file_url", "")
+            filename = os.path.basename(raw_url.replace("\\", "/"))
+            file["file_url"] = f"/uploads/{filename}" if filename else raw_url
+            
+        study["files"] = files
+        return study
+
+    async def get_all_studies(self, search: str = None, study_type: str = None) -> List[Dict[str, Any]]:
+        db = get_database()
+        query = {}
+        if study_type and study_type != "all":
+            query["study_type"] = study_type
+            
+        pipeline = []
+        if query:
+            pipeline.append({"$match": query})
+            
+        pipeline.append({
+            "$lookup": {
+                "from": "patients",
+                "localField": "patient_id",
+                "foreignField": "_id",
+                "as": "patient"
+            }
+        })
+        pipeline.append({"$unwind": "$patient"})
+        
+        if search:
+            pipeline.append({
+                "$match": {
+                    "$or": [
+                        {"patient.full_name": {"$regex": search, "$options": "i"}},
+                        {"patient.mrn": {"$regex": search, "$options": "i"}}
+                    ]
+                }
+            })
+            
+        pipeline.append({
+            "$lookup": {
+                "from": "study_files",
+                "localField": "_id",
+                "foreignField": "study_id",
+                "as": "files"
+            }
+        })
+        
+        results = await db.document_studies.aggregate(pipeline).to_list(1000)
+        results.sort(key=lambda x: x.get("created_at", datetime.min), reverse=True)
+        
+        formatted_data = []
+        for index, item in enumerate(results):
+            formatted_data.append({
+                "id": str(item["_id"]),
+                "app_id": f"APP-{str(index + 1).zfill(3)}",
+                "patient_name": item["patient"]["full_name"],
+                "mrn": item["patient"]["mrn"],
+                "study_type": item["study_type"],
+                "body_part": item.get("body_part", "N/A"),
+                "files_count": len(item.get("files", [])),
+                "latest_activity": item["created_at"],
+                "patient_id": str(item["patient_id"])
+            })
+            
+        return formatted_data
+
+    async def delete_study(self, study_id: str, user_id: str, user_role: str) -> Dict[str, str]:
+        db = get_database()
+        study = await db.document_studies.find_one({"_id": ObjectId(study_id)})
+        
+        if not study:
+            raise HTTPException(status_code=404, detail="Study not found")
+            
+        # Authorization check: only uploader or admin can delete
+        if user_role != "admin" and str(study["uploaded_by"]) != user_id:
+            raise HTTPException(status_code=403, detail="Not authorized to delete this study")
+            
+        # 1. Fetch all files for this study
+        files = await db.study_files.find({"study_id": ObjectId(study_id)}).to_list(100)
+        
+        # 2. Delete local files
+        for file in files:
+            delete_local_file(file["file_url"])
+            
+        # 3. Delete file records
+        await db.study_files.delete_many({"study_id": ObjectId(study_id)})
+        
+        # 4. Delete study record
+        await db.document_studies.delete_one({"_id": ObjectId(study_id)})
+        
+        return {"message": "Study and associated files deleted successfully"}
 
 document_service = DocumentService()

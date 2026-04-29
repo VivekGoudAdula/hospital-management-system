@@ -75,6 +75,15 @@ interface HospitalState {
   uploadDocument: (formData: FormData) => Promise<void>;
   deleteDocument: (id: string) => Promise<void>;
   
+  // Study Actions
+  studies: DocumentStudy[];
+  studyRepository: DocumentStudy[];
+  fetchPatientStudies: (patientId: string) => Promise<DocumentStudy[]>;
+  uploadStudy: (formData: FormData) => Promise<void>;
+  fetchAllStudies: (filters?: { search?: string, study_type?: string }) => Promise<void>;
+  fetchStudyById: (id: string) => Promise<DocumentStudy | null>;
+  deleteStudy: (id: string) => Promise<void>;
+  
   // Note Actions
   addNote: (note: Note) => void;
   
@@ -92,6 +101,8 @@ export const useHospitalStore = create<HospitalState>((set, get) => ({
   patients: [],
   documents: [],
   documentRepository: { data: [], total: 0 },
+  studies: [],
+  studyRepository: [],
   notes: initialNotes,
   prescriptions: [],
   timeline: [],
@@ -452,10 +463,23 @@ export const useHospitalStore = create<HospitalState>((set, get) => ({
           patientId: d.patient_id,
           fileUrl: `${BASE_URL}${d.file_url}`,
           fileName: d.file_name,
+          
+          scanDate: d.scan_date,
+          bodyPart: d.body_part,
+          department: d.department,
+          referringDoctorId: d.referring_doctor_id,
+          findings: d.findings,
+          impression: d.impression,
+          symptoms: d.symptoms,
+          clinicalHistory: d.clinical_history,
+          reasonForScan: d.reason_for_scan,
+          doctorNotes: d.doctor_notes,
+
           notes: d.notes,
           uploadDate: d.created_at,
           uploadedBy: d.uploaded_by
         }));
+
         set({ documents: mappedDocs });
         return mappedDocs;
       }
@@ -637,5 +661,129 @@ export const useHospitalStore = create<HospitalState>((set, get) => ({
       console.error('Fetch timeline error:', error);
     }
     return [];
+  },
+
+  // Study Implementation
+  fetchPatientStudies: async (patientId: string) => {
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch(`${API_URL}/documents/study/patient/${patientId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const mappedStudies = data.map((s: any) => ({
+          id: s.id,
+          patientId: s.patient_id,
+          studyType: s.study_type,
+          bodyPart: s.body_part,
+          scanDate: s.scan_date,
+          department: s.department,
+          referringDoctorId: s.referring_doctor_id,
+          findings: s.findings,
+          impression: s.impression,
+          symptoms: s.symptoms,
+          clinicalHistory: s.clinical_history,
+          reasonForScan: s.reason_for_scan,
+          doctorNotes: s.doctor_notes,
+          uploadedBy: s.uploaded_by,
+          createdAt: s.created_at,
+          files: s.files.map((f: any) => ({
+            id: f.id,
+            studyId: f.study_id,
+            fileUrl: `${BASE_URL}${f.file_url}`,
+            fileName: f.file_name,
+            fileFormat: f.file_format,
+            createdAt: f.created_at
+          }))
+        }));
+        set({ studies: mappedStudies });
+        return mappedStudies;
+      }
+    } catch (error) {
+      console.error('Fetch patient studies error:', error);
+    }
+    return [];
+  },
+
+  uploadStudy: async (formData: FormData) => {
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch(`${API_URL}/documents/study/upload`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      });
+      if (response.ok) {
+        const newStudy = await response.json();
+        set((state) => ({ 
+          studies: [newStudy, ...state.studies],
+          stats: state.stats ? { ...state.stats, total_documents: state.stats.total_documents + 1 } : null
+        }));
+        // Trigger timeline refresh
+        const patientId = formData.get('patient_id') as string;
+        if (patientId) get().fetchPatientTimeline(patientId);
+      } else {
+        const error = await response.json();
+        throw new Error(error.detail || 'Upload failed');
+      }
+    } catch (error) {
+      console.error('Upload study error:', error);
+      throw error;
+    }
+  },
+
+  fetchAllStudies: async (filters) => {
+    const token = localStorage.getItem('token');
+    try {
+      let url = `${API_URL}/documents/study`;
+      const params = new URLSearchParams();
+      if (filters?.search) params.append('search', filters.search);
+      if (filters?.study_type) params.append('study_type', filters.study_type);
+      if (params.toString()) url += `?${params.toString()}`;
+
+      const response = await fetch(url, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        set({ studyRepository: data });
+      }
+    } catch (error) {
+      console.error('Fetch all studies error:', error);
+    }
+  },
+
+  fetchStudyById: async (id: string) => {
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch(`${API_URL}/documents/study/${id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        return await response.json();
+      }
+    } catch (error) {
+      console.error('Fetch study by ID error:', error);
+    }
+    return null;
+  },
+
+  deleteStudy: async (id: string) => {
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch(`${API_URL}/documents/study/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        set((state) => ({ 
+          studies: state.studies.filter(s => s.id !== id),
+          studyRepository: state.studyRepository.filter(s => s.id !== id)
+        }));
+      }
+    } catch (error) {
+      console.error('Delete study error:', error);
+    }
   },
 }));

@@ -85,7 +85,9 @@ class DoctorDashboardService:
                 "data": {
                     "file_name": doc["file_name"],
                     "file_type": doc["file_type"],
-                    "file_url": doc["file_url"]
+                    "file_url": doc["file_url"],
+                    "impression": doc.get("impression"),
+                    "body_part": doc.get("body_part")
                 }
             })
 
