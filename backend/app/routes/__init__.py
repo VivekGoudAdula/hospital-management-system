@@ -1,1 +1,1 @@
-from . import auth_routes, department_routes, doctor_routes, patient_routes, document_routes, stats_routes, notes_routes, doctor_dashboard_routes, prescription_routes, soap_routes, appointment_routes, ot_routes, ehr_routes, diagnosis_routes
+from . import auth_routes, department_routes, doctor_routes, patient_routes, document_routes, stats_routes, notes_routes, doctor_dashboard_routes, prescription_routes, soap_routes, appointment_routes, ot_routes, ehr_routes, diagnosis_routes, vitals_routes

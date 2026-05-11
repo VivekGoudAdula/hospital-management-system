@@ -99,6 +99,29 @@ export interface ICDCode {
   label: string;
 }
 
+export interface Vitals {
+  id: string;
+  patient_id: string;
+  visit_id: string;
+  recorded_by: string;
+  blood_pressure: {
+    systolic: number;
+    diastolic: number;
+  };
+  pulse: number;
+  temperature: number;
+  spo2: number;
+  respiratory_rate: number;
+  height: number;
+  weight: number;
+  bmi: number;
+  bmi_status: string;
+  pain_scale: number;
+  blood_sugar?: number;
+  notes?: string;
+  created_at: string;
+}
+
 export interface Diagnosis {
   id: string;
   patient_id: string;
@@ -130,6 +153,11 @@ interface EHRState {
   /** Diagnosis state */
   diagnosis: Diagnosis | null;
   diagnosisLoading: boolean;
+
+  /** Vitals state */
+  vitalsHistory: Vitals[];
+  latestVitals: Vitals | null;
+  vitalsLoading: boolean;
 
   // EHR actions
   fetchPatientEHR: (patientId: string) => Promise<void>;
@@ -172,6 +200,13 @@ interface EHRState {
   searchMedicines: (query: string) => Promise<MedicineMetadata[]>;
   checkDrugInteractions: (patientId: string, medicines: MedicationItem[]) => Promise<any[]>;
   generatePrescriptionPDF: (id: string) => Promise<string | null>;
+
+  // Vitals actions
+  fetchVitals: (patientId: string) => Promise<void>;
+  fetchLatestVitals: (patientId: string) => Promise<void>;
+  saveVitals: (data: Partial<Vitals>) => Promise<void>;
+  updateVitals: (id: string, data: Partial<Vitals>) => Promise<void>;
+  deleteVitals: (id: string) => Promise<void>;
 }
 
 // ─── Store ───────────────────────────────────────────────────────────────────
@@ -190,6 +225,9 @@ export const useEHRStore = create<EHRState>((set, get) => ({
   prescription: null,
   medicationHistory: [],
   prescriptionLoading: false,
+  vitalsHistory: [],
+  latestVitals: null,
+  vitalsLoading: false,
 
   // ── EHR actions ──────────────────────────────────────────────────────────
 
@@ -276,6 +314,9 @@ export const useEHRStore = create<EHRState>((set, get) => ({
       prescription: null,
       medicationHistory: [],
       prescriptionLoading: false,
+      vitalsHistory: [],
+      latestVitals: null,
+      vitalsLoading: false,
     }),
 
   // ── SOAP actions ─────────────────────────────────────────────────────────
@@ -522,6 +563,98 @@ export const useEHRStore = create<EHRState>((set, get) => ({
     } catch (error) {
       console.error('Error generating PDF:', error);
       return null;
+    }
+  },
+
+  // ── Vitals actions ────────────────────────────────────────────────────
+
+  fetchVitals: async (patientId) => {
+    set({ vitalsLoading: true });
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await axios.get(`${API_URL}/ehr/vitals/${patientId}`, { headers });
+      set({ vitalsHistory: res.data, vitalsLoading: false });
+    } catch (error) {
+      console.error('Error fetching vitals:', error);
+      set({ vitalsLoading: false });
+    }
+  },
+
+  fetchLatestVitals: async (patientId) => {
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await axios.get(`${API_URL}/ehr/vitals/latest/${patientId}`, { headers });
+      set({ latestVitals: res.data });
+    } catch (error) {
+      // 404 is expected if no vitals exist
+      if (axios.isAxiosError(error) && error.response?.status === 404) {
+        set({ latestVitals: null });
+      } else {
+        console.error('Error fetching latest vitals:', error);
+      }
+    }
+  },
+
+  saveVitals: async (data) => {
+    set({ vitalsLoading: true });
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await axios.post(`${API_URL}/ehr/vitals`, data, { headers });
+      
+      const { currentPatient, fetchTimeline } = get();
+      if (currentPatient) {
+        get().fetchVitals(currentPatient.id);
+        get().fetchLatestVitals(currentPatient.id);
+        fetchTimeline(currentPatient.id);
+      }
+      set({ vitalsLoading: false });
+    } catch (error) {
+      console.error('Error saving vitals:', error);
+      set({ vitalsLoading: false });
+      throw error;
+    }
+  },
+
+  updateVitals: async (id, data) => {
+    set({ vitalsLoading: true });
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
+      await axios.patch(`${API_URL}/ehr/vitals/${id}`, data, { headers });
+      
+      const { currentPatient } = get();
+      if (currentPatient) {
+        get().fetchVitals(currentPatient.id);
+        get().fetchLatestVitals(currentPatient.id);
+      }
+      set({ vitalsLoading: false });
+    } catch (error) {
+      console.error('Error updating vitals:', error);
+      set({ vitalsLoading: false });
+      throw error;
+    }
+  },
+
+  deleteVitals: async (id) => {
+    set({ vitalsLoading: true });
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
+      await axios.delete(`${API_URL}/ehr/vitals/${id}`, { headers });
+      
+      const { currentPatient } = get();
+      if (currentPatient) {
+        get().fetchVitals(currentPatient.id);
+        get().fetchLatestVitals(currentPatient.id);
+      }
+      set({ vitalsLoading: false });
+    } catch (error) {
+      console.error('Error deleting vitals:', error);
+      set({ vitalsLoading: false });
+      throw error;
     }
   },
 }));

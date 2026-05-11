@@ -31,6 +31,7 @@ import { useEHRStore, useAuthStore } from '@/store';
 import SOAPNotesPanel from './components/SOAPNotesPanel';
 import DiagnosisPanel from './components/DiagnosisPanel';
 import PrescriptionPanel from './components/PrescriptionPanel';
+import VitalsPanel from './components/VitalsPanel';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 
@@ -47,10 +48,12 @@ const EHRWorkspace = () => {
     selectedTab,
     soapNote,
     diagnosis,
+    latestVitals,
     fetchPatientEHR, 
     fetchActiveVisit,
     fetchTimeline,
     fetchDiagnosis,
+    fetchLatestVitals,
     setSelectedTab,
     reset 
   } = useEHRStore();
@@ -60,6 +63,7 @@ const EHRWorkspace = () => {
       fetchPatientEHR(patientId);
       fetchActiveVisit(patientId);
       fetchTimeline(patientId);
+      fetchLatestVitals(patientId);
     }
     return () => reset();
   }, [patientId]);
@@ -203,172 +207,208 @@ const EHRWorkspace = () => {
         <div className="flex-1 overflow-y-auto p-8 scrollbar-hide">
           <div className="max-w-5xl mx-auto space-y-8">
             <AnimatePresence mode="wait">
-              {selectedTab === 'Overview' ? (
-                <motion.div 
-                  key="overview"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  className="space-y-8"
-                >
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                     {/* Active Visit Engine */}
-                     <Card className="rounded-3xl border-slate-100 shadow-xl shadow-slate-200/50 overflow-hidden">
-                        <CardHeader className="bg-indigo-600 text-white pb-8">
-                           <div className="flex items-center justify-between mb-4">
-                              <Badge className="bg-white/20 text-white border-none rounded-lg text-[9px] font-bold uppercase tracking-widest px-2">Clinical Session</Badge>
-                              <Clock className="h-4 w-4 text-white/60" />
-                           </div>
-                           <CardTitle className="text-2xl font-bold tracking-tight">Active Visit</CardTitle>
-                           <p className="text-indigo-100 text-xs font-medium">Initialized {currentVisit ? format(new Date(currentVisit.admission_date), 'MMMM dd, hh:mm a') : '...'}</p>
-                        </CardHeader>
-                        <CardContent className="pt-8 space-y-6">
-                           <div className="space-y-4">
-                              <div className="flex items-center gap-3">
-                                 <div className="h-8 w-8 rounded-xl bg-indigo-50 flex items-center justify-center">
-                                    <FileText className="h-4 w-4 text-indigo-600" />
-                                 </div>
-                                 <div className="flex-1">
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Chief Complaint</p>
-                                    <p className="text-sm font-bold text-slate-800">{currentVisit?.chief_complaint || 'No complaint registered'}</p>
-                                 </div>
-                              </div>
-                              <div className="flex items-center gap-3">
-                                 <div className="h-8 w-8 rounded-xl bg-indigo-50 flex items-center justify-center">
-                                    <Stethoscope className="h-4 w-4 text-indigo-600" />
-                                 </div>
-                                 <div className="flex-1">
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Primary Objective</p>
-                                    <p className="text-sm font-bold text-slate-800">Routine Clinical Evaluation</p>
-                                 </div>
-                              </div>
-                           </div>
-                           <Button 
-                             className="w-full rounded-2xl h-12 bg-indigo-600 text-white font-bold text-xs uppercase tracking-widest shadow-lg shadow-indigo-100"
-                             onClick={() => setSelectedTab('SOAP')}
-                           >
-                              Start clinical Note
-                           </Button>
-                        </CardContent>
-                     </Card>
+              {(() => {
+                console.log('Current EHR Tab:', selectedTab);
+                if (selectedTab === 'Overview') {
+                  return (
+                    <motion.div 
+                      key="overview"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      className="space-y-8"
+                    >
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                         {/* Active Visit Engine */}
+                         <Card className="rounded-3xl border-slate-100 shadow-xl shadow-slate-200/50 overflow-hidden">
+                            <CardHeader className="bg-indigo-600 text-white pb-8">
+                               <div className="flex items-center justify-between mb-4">
+                                  <Badge className="bg-white/20 text-white border-none rounded-lg text-[9px] font-bold uppercase tracking-widest px-2">Clinical Session</Badge>
+                                  <Clock className="h-4 w-4 text-white/60" />
+                               </div>
+                               <CardTitle className="text-2xl font-bold tracking-tight">Active Visit</CardTitle>
+                               <p className="text-indigo-100 text-xs font-medium">Initialized {currentVisit ? format(new Date(currentVisit.admission_date), 'MMMM dd, hh:mm a') : '...'}</p>
+                            </CardHeader>
+                            <CardContent className="pt-8 space-y-6">
+                               <div className="space-y-4">
+                                  <div className="flex items-center gap-3">
+                                     <div className="h-8 w-8 rounded-xl bg-indigo-50 flex items-center justify-center">
+                                        <FileText className="h-4 w-4 text-indigo-600" />
+                                     </div>
+                                     <div className="flex-1">
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Chief Complaint</p>
+                                        <p className="text-sm font-bold text-slate-800">{currentVisit?.chief_complaint || 'No complaint registered'}</p>
+                                     </div>
+                                  </div>
+                                  <div className="flex items-center gap-3">
+                                     <div className="h-8 w-8 rounded-xl bg-indigo-50 flex items-center justify-center">
+                                        <Stethoscope className="h-4 w-4 text-indigo-600" />
+                                     </div>
+                                     <div className="flex-1">
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Primary Objective</p>
+                                        <p className="text-sm font-bold text-slate-800">Routine Clinical Evaluation</p>
+                                     </div>
+                                  </div>
+                               </div>
+                               <Button 
+                                 className="w-full rounded-2xl h-12 bg-indigo-600 text-white font-bold text-xs uppercase tracking-widest shadow-lg shadow-indigo-100"
+                                 onClick={() => setSelectedTab('SOAP')}
+                               >
+                                  Start clinical Note
+                               </Button>
+                            </CardContent>
+                         </Card>
 
-                     {/* Recent Vitals Placeholder */}
-                     <Card className="rounded-3xl border-slate-100 shadow-xl shadow-slate-200/50">
-                        <CardHeader className="pb-4">
-                           <CardTitle className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                              <Activity className="h-5 w-5 text-indigo-600" />
-                              Last Captured Vitals
-                           </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-6">
-                           <div className="grid grid-cols-2 gap-4">
-                              {[
-                                { label: 'BP', value: '120/80', unit: 'mmHg', color: 'text-indigo-600' },
-                                { label: 'Pulse', value: '72', unit: 'bpm', color: 'text-rose-600' },
-                                { label: 'Temp', value: '98.6', unit: '°F', color: 'text-amber-600' },
-                                { label: 'SpO2', value: '98', unit: '%', color: 'text-emerald-600' },
-                              ].map((v, i) => (
-                                <div key={i} className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
-                                   <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">{v.label}</p>
-                                   <div className="flex items-baseline gap-1">
-                                      <span className={cn("text-xl font-bold tracking-tight", v.color)}>{v.value}</span>
-                                      <span className="text-[10px] font-bold text-slate-400">{v.unit}</span>
-                                   </div>
-                                </div>
-                              ))}
-                           </div>
-                           <Button variant="outline" className="w-full rounded-2xl h-12 border-slate-200 text-slate-600 font-bold text-xs uppercase tracking-widest hover:bg-slate-50">
-                              Capture New Vitals
-                           </Button>
-                        </CardContent>
-                     </Card>
-                  </div>
-
-                  {/* Visit History Timeline Foundation */}
-                  <Card className="rounded-3xl border-slate-100 shadow-xl shadow-slate-200/50 overflow-hidden">
-                     <CardHeader className="p-8 border-b border-slate-50 flex flex-row items-center justify-between">
-                        <div>
-                           <CardTitle className="text-xl font-bold text-slate-900">Clinical Lifecycle</CardTitle>
-                           <p className="text-slate-400 text-xs font-medium">Aggregated medical timeline for current entity.</p>
-                        </div>
-                        <Button variant="ghost" size="icon" className="rounded-xl text-slate-400">
-                           <PlusCircle className="h-5 w-5" />
-                        </Button>
-                     </CardHeader>
-                     <CardContent className="p-8">
-                        {timeline.length === 0 ? (
-                           <div className="py-12 text-center space-y-3">
-                              <History className="h-10 w-10 text-slate-200 mx-auto" />
-                              <p className="text-slate-400 text-sm font-medium">No clinical events recorded yet.</p>
-                           </div>
-                        ) : (
-                           <div className="space-y-8 relative before:absolute before:left-[19px] before:top-2 before:bottom-2 before:w-[2px] before:bg-slate-100">
-                              {timeline.map((item, i) => (
-                                 <div key={i} className="relative pl-12">
-                                    <div className="absolute left-0 top-1 h-10 w-10 rounded-2xl bg-white border-2 border-slate-100 flex items-center justify-center z-10">
-                                       {item.type === 'visit' ? <Clock className="h-4 w-4 text-indigo-600" /> : <FileText className="h-4 w-4 text-indigo-600" />}
-                                    </div>
-                                    <div className="space-y-1">
-                                       <div className="flex items-center justify-between">
-                                          <h4 className="text-sm font-bold text-slate-800">{item.title}</h4>
-                                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{format(new Date(item.timestamp), 'MMM dd, yyyy')}</span>
+                         {/* Recent Vitals Placeholder */}
+                         <Card className="rounded-3xl border-slate-100 shadow-xl shadow-slate-200/50">
+                            <CardHeader className="pb-4">
+                               <CardTitle className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                                  <Activity className="h-5 w-5 text-indigo-600" />
+                                  Last Captured Vitals
+                               </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-6">
+                               <div className="grid grid-cols-2 gap-4">
+                                  {[
+                                    { label: 'BP', value: latestVitals ? `${latestVitals.blood_pressure.systolic}/${latestVitals.blood_pressure.diastolic}` : '--', unit: 'mmHg', color: 'text-indigo-600' },
+                                    { label: 'Pulse', value: latestVitals?.pulse || '--', unit: 'bpm', color: 'text-rose-600' },
+                                    { label: 'Temp', value: latestVitals?.temperature || '--', unit: '°F', color: 'text-amber-600' },
+                                    { label: 'SpO2', value: latestVitals?.spo2 || '--', unit: '%', color: 'text-emerald-600' },
+                                  ].map((v, i) => (
+                                    <div key={i} className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                                       <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">{v.label}</p>
+                                       <div className="flex items-baseline gap-1">
+                                          <span className={cn("text-xl font-bold tracking-tight", v.color)}>{v.value}</span>
+                                          <span className="text-[10px] font-bold text-slate-400">{v.unit}</span>
                                        </div>
-                                       <p className="text-xs text-slate-500 font-medium">Status: <span className="text-indigo-600 font-bold uppercase text-[9px]">{item.metadata?.status}</span></p>
                                     </div>
-                                 </div>
-                              ))}
-                           </div>
-                        )}
-                     </CardContent>
-                  </Card>
-                </motion.div>
-              ) : selectedTab === 'SOAP' ? (
-                <motion.div
-                  key="soap"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                >
-                  <SOAPNotesPanel />
-                </motion.div>
-              ) : selectedTab === 'Diagnoses' ? (
-                <motion.div
-                  key="diagnoses"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                >
-                  <DiagnosisPanel />
-                </motion.div>
-              ) : selectedTab === 'Prescriptions' ? (
-                <motion.div
-                  key="prescriptions"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                >
-                  <PrescriptionPanel />
-                </motion.div>
-              ) : (
-                <motion.div 
-                  key="placeholder"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="flex flex-col items-center justify-center h-[50vh] space-y-6 text-center"
-                >
-                  <div className="h-20 w-20 rounded-[2rem] bg-indigo-50 border border-indigo-100 flex items-center justify-center">
-                    {menuItems.find(i => i.id === selectedTab)?.icon && React.createElement(menuItems.find(i => i.id === selectedTab)!.icon, { className: "h-10 w-10 text-indigo-300" })}
-                  </div>
-                  <div className="space-y-2">
-                    <h2 className="text-2xl font-bold text-slate-800 tracking-tight">{selectedTab} Module</h2>
-                    <p className="text-slate-400 max-w-sm mx-auto font-medium">This clinical module is currently under development. Foundation is ready for integration.</p>
-                  </div>
-                  <Button variant="outline" className="rounded-2xl px-8 h-12 border-slate-200 text-indigo-600 font-bold uppercase tracking-widest text-xs" onClick={() => setSelectedTab('Overview')}>
-                     Return to Overview
-                  </Button>
-                </motion.div>
-              )}
+                                  ))}
+                               </div>
+                               <Button 
+                                 variant="outline" 
+                                 className="w-full rounded-2xl h-12 border-slate-200 text-slate-600 font-bold text-xs uppercase tracking-widest hover:bg-slate-50"
+                                 onClick={() => setSelectedTab('Vitals')}
+                               >
+                                  Capture New Vitals
+                               </Button>
+                            </CardContent>
+                         </Card>
+                      </div>
+
+                      {/* Visit History Timeline Foundation */}
+                      <Card className="rounded-3xl border-slate-100 shadow-xl shadow-slate-200/50 overflow-hidden">
+                         <CardHeader className="p-8 border-b border-slate-50 flex flex-row items-center justify-between">
+                            <div>
+                               <CardTitle className="text-xl font-bold text-slate-900">Clinical Lifecycle</CardTitle>
+                               <p className="text-slate-400 text-xs font-medium">Aggregated medical timeline for current entity.</p>
+                            </div>
+                            <Button variant="ghost" size="icon" className="rounded-xl text-slate-400">
+                               <PlusCircle className="h-5 w-5" />
+                            </Button>
+                         </CardHeader>
+                         <CardContent className="p-8">
+                            {timeline.length === 0 ? (
+                               <div className="py-12 text-center space-y-3">
+                                  <History className="h-10 w-10 text-slate-200 mx-auto" />
+                                  <p className="text-slate-400 text-sm font-medium">No clinical events recorded yet.</p>
+                               </div>
+                            ) : (
+                               <div className="space-y-8 relative before:absolute before:left-[19px] before:top-2 before:bottom-2 before:w-[2px] before:bg-slate-100">
+                                  {timeline.map((item, i) => (
+                                     <div key={i} className="relative pl-12">
+                                        <div className="absolute left-0 top-1 h-10 w-10 rounded-2xl bg-white border-2 border-slate-100 flex items-center justify-center z-10">
+                                           {item.type === 'visit' ? <Clock className="h-4 w-4 text-indigo-600" /> : <FileText className="h-4 w-4 text-indigo-600" />}
+                                        </div>
+                                        <div className="space-y-1">
+                                           <div className="flex items-center justify-between">
+                                              <h4 className="text-sm font-bold text-slate-800">{item.title}</h4>
+                                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{format(new Date(item.timestamp), 'MMM dd, yyyy')}</span>
+                                           </div>
+                                           <p className="text-xs text-slate-500 font-medium">Status: <span className="text-indigo-600 font-bold uppercase text-[9px]">{item.metadata?.status}</span></p>
+                                        </div>
+                                     </div>
+                                  ))}
+                               </div>
+                            )}
+                         </CardContent>
+                      </Card>
+                    </motion.div>
+                  );
+                }
+                
+                if (selectedTab === 'SOAP') {
+                  return (
+                    <motion.div
+                      key="soap"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                    >
+                      <SOAPNotesPanel />
+                    </motion.div>
+                  );
+                }
+
+                if (selectedTab === 'Diagnoses') {
+                  return (
+                    <motion.div
+                      key="diagnoses"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                    >
+                      <DiagnosisPanel />
+                    </motion.div>
+                  );
+                }
+
+                if (selectedTab === 'Prescriptions') {
+                  return (
+                    <motion.div
+                      key="prescriptions"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                    >
+                      <PrescriptionPanel />
+                    </motion.div>
+                  );
+                }
+
+                if (selectedTab === 'Vitals') {
+                  return (
+                    <motion.div
+                      key="vitals"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                    >
+                      <VitalsPanel />
+                    </motion.div>
+                  );
+                }
+
+                return (
+                  <motion.div 
+                    key="placeholder"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="flex flex-col items-center justify-center h-[50vh] space-y-6 text-center"
+                  >
+                    <div className="h-20 w-20 rounded-[2rem] bg-indigo-50 border border-indigo-100 flex items-center justify-center">
+                      {menuItems.find(i => i.id === selectedTab)?.icon && React.createElement(menuItems.find(i => i.id === selectedTab)!.icon, { className: "h-10 w-10 text-indigo-300" })}
+                    </div>
+                    <div className="space-y-2">
+                      <h2 className="text-2xl font-bold text-slate-800 tracking-tight">{selectedTab} Module</h2>
+                      <p className="text-slate-400 max-w-sm mx-auto font-medium">This clinical module is currently under development. Foundation is ready for integration.</p>
+                    </div>
+                    <Button variant="outline" className="rounded-2xl px-8 h-12 border-slate-200 text-indigo-600 font-bold uppercase tracking-widest text-xs" onClick={() => setSelectedTab('Overview')}>
+                       Return to Overview
+                    </Button>
+                  </motion.div>
+                );
+              })()}
             </AnimatePresence>
           </div>
         </div>
@@ -383,9 +423,9 @@ const EHRWorkspace = () => {
               </div>
               <div className="space-y-3">
                  {[
-                   { label: 'Weight', value: '72 kg', change: '+2 kg' },
-                   { label: 'Height', value: '175 cm', change: 'Stable' },
-                   { label: 'BMI', value: '23.5', change: 'Normal', color: 'text-emerald-600' },
+                   { label: 'Weight', value: latestVitals ? `${latestVitals.weight} kg` : '--', change: 'Recorded' },
+                   { label: 'Height', value: latestVitals ? `${latestVitals.height} cm` : '--', change: 'Recorded' },
+                   { label: 'BMI', value: latestVitals?.bmi || '--', change: latestVitals?.bmi_status || 'Stable', color: latestVitals?.bmi_status === 'Normal' ? 'text-emerald-600' : 'text-amber-600' },
                  ].map((s, i) => (
                    <div key={i} className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 border border-slate-100">
                       <span className="text-xs font-bold text-slate-500">{s.label}</span>

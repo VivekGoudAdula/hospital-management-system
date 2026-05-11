@@ -51,8 +51,8 @@ class AppointmentService:
             email_html = get_appointment_email_template(
                 patient_name=patient["full_name"],
                 doctor_name=appointment["doctor_name"],
-                date=appointment["date"],
-                time=appointment["time"],
+                date=appointment["appointment_date"],
+                time=appointment["appointment_time"],
                 token=appointment["token"],
                 action_type="confirmed"
             )
@@ -147,8 +147,8 @@ class AppointmentService:
                 email_html = get_appointment_email_template(
                     patient_name=patient["full_name"],
                     doctor_name=updated_app["doctor_name"],
-                    date=updated_app["date"],
-                    time=updated_app["time"],
+                    date=updated_app["appointment_date"],
+                    time=updated_app["appointment_time"],
                     token=updated_app["token"],
                     action_type="rescheduled"
                 )

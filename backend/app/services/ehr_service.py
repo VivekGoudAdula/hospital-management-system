@@ -179,5 +179,18 @@ class EHRService:
         timeline.sort(key=lambda x: x.get("timestamp", datetime.min), reverse=True)
         return timeline
 
+    async def add_timeline_event(self, patient_id: str, event_type: str, title: str, created_by: str, description: str = "", metadata: Dict[str, Any] = None) -> None:
+        """Centralized method to log clinical events into the patient timeline."""
+        db = get_database()
+        await db["patient_timeline"].insert_one({
+            "type": event_type,
+            "title": title,
+            "description": description,
+            "timestamp": datetime.utcnow(),
+            "patient_id": ObjectId(patient_id),
+            "created_by": created_by,
+            "metadata": metadata or {}
+        })
+
 ehr_service = EHRService()
 
