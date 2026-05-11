@@ -30,6 +30,7 @@ import { Separator } from '@/components/ui/separator';
 import { useEHRStore, useAuthStore } from '@/store';
 import SOAPNotesPanel from './components/SOAPNotesPanel';
 import DiagnosisPanel from './components/DiagnosisPanel';
+import PrescriptionPanel from './components/PrescriptionPanel';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 
@@ -152,23 +153,9 @@ const EHRWorkspace = () => {
           </div>
         </div>
 
-        {/* Allergy & Flag Strip */}
+        {/* Allergy & Flag Strip Placeholder */}
         <div className="flex items-center gap-4">
-           <div className="flex-1 h-10 rounded-xl bg-rose-50 border border-rose-100/50 flex items-center px-4 gap-3 overflow-hidden">
-              <AlertTriangle className="h-4 w-4 text-rose-500 shrink-0" />
-              <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
-                 {['Penicillin', 'Peanuts', 'Latex'].map(a => (
-                   <Badge key={a} className="bg-rose-500 text-white border-none rounded-lg text-[9px] font-bold uppercase tracking-widest px-2 whitespace-nowrap">
-                     {a}
-                   </Badge>
-                 ))}
-                 <span className="text-[10px] font-bold text-rose-400 uppercase tracking-widest ml-2">High Severity Alerts</span>
-              </div>
-           </div>
-           <div className="h-10 px-4 rounded-xl bg-amber-50 border border-amber-100/50 flex items-center gap-3">
-              <Info className="h-4 w-4 text-amber-500" />
-              <span className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">Chronic Hypertension</span>
-           </div>
+           <div className="flex-1 h-1 rounded-xl bg-slate-50/50" />
         </div>
       </div>
 
@@ -352,6 +339,15 @@ const EHRWorkspace = () => {
                   exit={{ opacity: 0, y: -10 }}
                 >
                   <DiagnosisPanel />
+                </motion.div>
+              ) : selectedTab === 'Prescriptions' ? (
+                <motion.div
+                  key="prescriptions"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                >
+                  <PrescriptionPanel />
                 </motion.div>
               ) : (
                 <motion.div 

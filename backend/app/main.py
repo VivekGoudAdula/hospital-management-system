@@ -8,15 +8,19 @@ from .routes import auth_routes, department_routes, doctor_routes, patient_route
 
 app = FastAPI(title="ApexCare Backend")
 
-# Ensure uploads directory exists
+# Ensure uploads & static directories exist
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 uploads_dir = os.path.join(BASE_DIR, "uploads")
+static_dir = os.path.join(BASE_DIR, "static")
 
 if not os.path.exists(uploads_dir):
     os.makedirs(uploads_dir)
+if not os.path.exists(static_dir):
+    os.makedirs(static_dir)
 
 # Mount Static Files
 app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 # CORS Setup
 # Strip spaces and any quotes that might come from env variables

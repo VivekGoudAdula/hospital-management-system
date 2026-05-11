@@ -1,10 +1,23 @@
 from fastapi import APIRouter, Depends, status, HTTPException, Query
-from typing import List
-from ..schemas.prescription_schema import PrescriptionCreate, PrescriptionResponse
+from typing import List, Optional
+from ..schemas.prescription_schema import (
+    PrescriptionCreate, 
+    PrescriptionUpdate, 
+    PrescriptionResponse, 
+    MedicineSearchResponse
+)
 from ..services.prescription_service import prescription_service
 from ..utils.dependencies import require_doctor, require_role
 
-router = APIRouter(prefix="/prescriptions", tags=["Prescriptions"])
+router = APIRouter(prefix="/ehr/prescription", tags=["Prescriptions"])
+
+@router.get("/medicines/search", response_model=List[MedicineSearchResponse])
+async def search_medicines(
+    q: str = Query("", description="Search query for medicine name or generic"),
+    current_user: dict = Depends(require_doctor)
+):
+    """Search for medicines in the database."""
+    return await prescription_service.search_medicines(q)
 
 @router.post("/", response_model=PrescriptionResponse, status_code=status.HTTP_201_CREATED)
 async def create_prescription(
@@ -12,27 +25,66 @@ async def create_prescription(
     current_user: dict = Depends(require_doctor)
 ):
     """Create a new prescription."""
-    doctor_id = current_user.get("doctor_id")
-    
-    # If user is an admin without a doctor_id, they must provide one in the request
-    if not doctor_id:
-        if data.doctor_id:
-            doctor_id = data.doctor_id
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Current user is not associated with a doctor profile. Please provide a doctor_id."
-            )
-            
+    doctor_id = str(current_user.get("_id"))
     return await prescription_service.create_prescription(data, doctor_id)
 
-@router.get("/", response_model=List[PrescriptionResponse])
-async def get_prescriptions(
-    patient_id: str = Query(...),
+@router.get("/visit/{visit_id}", response_model=Optional[PrescriptionResponse])
+async def get_visit_prescription(
+    visit_id: str,
     current_user: dict = Depends(require_doctor)
 ):
-    """Get all prescriptions for a specific patient."""
-    return await prescription_service.get_patient_prescriptions(patient_id)
+    """Fetch prescription for a specific visit."""
+    return await prescription_service.get_visit_prescription(visit_id)
+
+@router.patch("/{id}", response_model=PrescriptionResponse)
+async def update_prescription(
+    id: str,
+    data: PrescriptionUpdate,
+    current_user: dict = Depends(require_doctor)
+):
+    """Update an existing draft prescription."""
+    return await prescription_service.update_prescription(id, data)
+
+@router.post("/{id}/finalize", response_model=PrescriptionResponse)
+async def finalize_prescription(
+    id: str,
+    current_user: dict = Depends(require_doctor)
+):
+    """Finalize and digitally sign a prescription."""
+    doctor_id = str(current_user.get("_id"))
+    return await prescription_service.finalize_prescription(id, doctor_id)
+
+@router.get("/history/{patient_id}", response_model=List[dict])
+async def get_medication_history(
+    patient_id: str,
+    current_user: dict = Depends(require_doctor)
+):
+    """Fetch complete medication history for a patient."""
+    return await prescription_service.get_medication_history(patient_id)
+
+@router.post("/check-interactions", response_model=List[dict])
+async def check_interactions(
+    data: dict,
+    current_user: dict = Depends(require_doctor)
+):
+    """Check for drug interactions and allergies."""
+    patient_id = data.get("patientId")
+    medicines = data.get("medicines", [])
+    # Convert to MedicationItem objects for the service
+    from ..schemas.prescription_schema import MedicationItem
+    med_items = [MedicationItem(**m) for m in medicines]
+    return await prescription_service.check_interactions(patient_id, med_items)
+
+@router.post("/{id}/pdf")
+async def generate_prescription_pdf(
+    id: str,
+    current_user: dict = Depends(require_doctor)
+):
+    """Generate a printable PDF for the prescription."""
+    url = await prescription_service.generate_pdf(id)
+    if not url:
+        raise HTTPException(status_code=500, detail="PDF generation failed or reportlab not installed")
+    return {"pdf_url": url}
 
 @router.get("/{id}", response_model=PrescriptionResponse)
 async def get_prescription(

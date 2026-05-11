@@ -1,0 +1,82 @@
+[
+  {
+    "name": "Paracetamol 650mg",
+    "generic": "Acetaminophen",
+    "dosage_variants": ["500mg", "650mg", "1000mg"],
+    "category": "Analgesic",
+    "contraindications": ["Severe liver disease"],
+    "interactions": ["Warfarin"]
+  },
+  {
+    "name": "Amoxicillin 500mg",
+    "generic": "Amoxicillin",
+    "dosage_variants": ["250mg", "500mg"],
+    "category": "Antibiotic",
+    "contraindications": ["Penicillin allergy"],
+    "interactions": ["Methotrexate"]
+  },
+  {
+    "name": "Metformin 500mg",
+    "generic": "Metformin",
+    "dosage_variants": ["500mg", "850mg", "1000mg"],
+    "category": "Antidiabetic",
+    "contraindications": ["Severe renal impairment"],
+    "interactions": ["Cimetidine"]
+  },
+  {
+    "name": "Amlodipine 5mg",
+    "generic": "Amlodipine",
+    "dosage_variants": ["2.5mg", "5mg", "10mg"],
+    "category": "Antihypertensive",
+    "contraindications": ["Severe hypotension"],
+    "interactions": ["Simvastatin"]
+  },
+  {
+    "name": "Atorvastatin 20mg",
+    "generic": "Atorvastatin",
+    "dosage_variants": ["10mg", "20mg", "40mg", "80mg"],
+    "category": "Statin",
+    "contraindications": ["Active liver disease"],
+    "interactions": ["Clarithromycin"]
+  },
+  {
+    "name": "Ibuprofen 400mg",
+    "generic": "Ibuprofen",
+    "dosage_variants": ["200mg", "400mg", "600mg"],
+    "category": "NSAID",
+    "contraindications": ["Peptic ulcer", "Severe heart failure"],
+    "interactions": ["Aspirin", "Warfarin"]
+  },
+  {
+    "name": "Omeprazole 20mg",
+    "generic": "Omeprazole",
+    "dosage_variants": ["10mg", "20mg", "40mg"],
+    "category": "PPI",
+    "contraindications": ["Hypersensitivity"],
+    "interactions": ["Clopidogrel"]
+  },
+  {
+    "name": "Cetirizine 10mg",
+    "generic": "Cetirizine",
+    "dosage_variants": ["5mg", "10mg"],
+    "category": "Antihistamine",
+    "contraindications": ["Severe renal impairment"],
+    "interactions": ["Alcohol"]
+  },
+  {
+    "name": "Azithromycin 500mg",
+    "generic": "Azithromycin",
+    "dosage_variants": ["250mg", "500mg"],
+    "category": "Antibiotic",
+    "contraindications": ["History of cholestatic jaundice"],
+    "interactions": ["Digoxin"]
+  },
+  {
+    "name": "Pantoprazole 40mg",
+    "generic": "Pantoprazole",
+    "dosage_variants": ["20mg", "40mg"],
+    "category": "PPI",
+    "contraindications": ["Hypersensitivity"],
+    "interactions": ["Iron salts"]
+  }
+]

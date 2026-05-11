@@ -53,6 +53,47 @@ export interface SoapNote {
   updated_at: string;
 }
 
+export interface MedicationItem {
+  medicine_name: string;
+  dosage: string;
+  frequency: string;
+  duration: string;
+  route: string;
+  instructions: string;
+}
+
+export interface Prescription {
+  id: string;
+  patient_id: string;
+  visit_id: string;
+  doctor_id: string;
+  diagnosis_id?: string;
+  medicines: MedicationItem[];
+  notes: string;
+  status: 'draft' | 'finalized';
+  signed_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MedicationHistoryItem {
+  medicine_name: string;
+  dosage: string;
+  frequency: string;
+  duration: string;
+  prescribed_at: string;
+  doctor_id: string;
+}
+
+export interface MedicineMetadata {
+  name: string;
+  generic: string;
+  dosage_variants: string[];
+  category: string;
+  contraindications: string[];
+  interactions: string[];
+}
+
 export interface ICDCode {
   code: string;
   label: string;
@@ -116,6 +157,21 @@ interface EHRState {
   updateDiagnosis: (id: string, data: Partial<Diagnosis>) => Promise<void>;
   deleteDiagnosis: (id: string) => Promise<void>;
   searchICD: (query: string) => Promise<ICDCode[]>;
+
+  /** Prescription state */
+  prescription: Prescription | null;
+  medicationHistory: MedicationHistoryItem[];
+  prescriptionLoading: boolean;
+
+  // Prescription actions
+  fetchVisitPrescription: (visitId: string) => Promise<void>;
+  createPrescription: (data: Partial<Prescription>) => Promise<void>;
+  updatePrescription: (id: string, data: Partial<Prescription>) => Promise<void>;
+  finalizePrescription: (id: string) => Promise<void>;
+  fetchMedicationHistory: (patientId: string) => Promise<void>;
+  searchMedicines: (query: string) => Promise<MedicineMetadata[]>;
+  checkDrugInteractions: (patientId: string, medicines: MedicationItem[]) => Promise<any[]>;
+  generatePrescriptionPDF: (id: string) => Promise<string | null>;
 }
 
 // ─── Store ───────────────────────────────────────────────────────────────────
@@ -131,6 +187,9 @@ export const useEHRStore = create<EHRState>((set, get) => ({
   soapLoading: false,
   diagnosis: null,
   diagnosisLoading: false,
+  prescription: null,
+  medicationHistory: [],
+  prescriptionLoading: false,
 
   // ── EHR actions ──────────────────────────────────────────────────────────
 
@@ -214,6 +273,9 @@ export const useEHRStore = create<EHRState>((set, get) => ({
       soapLoading: false,
       diagnosis: null,
       diagnosisLoading: false,
+      prescription: null,
+      medicationHistory: [],
+      prescriptionLoading: false,
     }),
 
   // ── SOAP actions ─────────────────────────────────────────────────────────
@@ -349,6 +411,117 @@ export const useEHRStore = create<EHRState>((set, get) => ({
     } catch (error) {
       console.error('Error searching ICD:', error);
       return [];
+    }
+  },
+
+  // ── Prescription actions ──────────────────────────────────────────────
+
+  fetchVisitPrescription: async (visitId) => {
+    set({ prescriptionLoading: true });
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await axios.get(`${API_URL}/ehr/prescription/visit/${visitId}`, { headers });
+      set({ prescription: res.data, prescriptionLoading: false });
+    } catch (error) {
+      console.error('Error fetching prescription:', error);
+      set({ prescriptionLoading: false });
+    }
+  },
+
+  createPrescription: async (data) => {
+    set({ prescriptionLoading: true });
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await axios.post(`${API_URL}/ehr/prescription`, data, { headers });
+      set({ prescription: res.data, prescriptionLoading: false });
+      
+      const { currentPatient, fetchTimeline } = get();
+      if (currentPatient) fetchTimeline(currentPatient.id);
+    } catch (error) {
+      console.error('Error creating prescription:', error);
+      set({ prescriptionLoading: false });
+      throw error;
+    }
+  },
+
+  updatePrescription: async (id, data) => {
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await axios.patch(`${API_URL}/ehr/prescription/${id}`, data, { headers });
+      set({ prescription: res.data });
+    } catch (error) {
+      console.error('Error updating prescription:', error);
+      throw error;
+    }
+  },
+
+  finalizePrescription: async (id) => {
+    set({ prescriptionLoading: true });
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await axios.post(`${API_URL}/ehr/prescription/${id}/finalize`, {}, { headers });
+      set({ prescription: res.data, prescriptionLoading: false });
+      
+      const { currentPatient, fetchTimeline } = get();
+      if (currentPatient) fetchTimeline(currentPatient.id);
+    } catch (error) {
+      console.error('Error finalizing prescription:', error);
+      set({ prescriptionLoading: false });
+      throw error;
+    }
+  },
+
+  fetchMedicationHistory: async (patientId) => {
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await axios.get(`${API_URL}/ehr/prescription/history/${patientId}`, { headers });
+      set({ medicationHistory: res.data });
+    } catch (error) {
+      console.error('Error fetching medication history:', error);
+    }
+  },
+
+  searchMedicines: async (query) => {
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await axios.get(`${API_URL}/ehr/prescription/medicines/search?q=${query}`, { headers });
+      return res.data;
+    } catch (error) {
+      console.error('Error searching medicines:', error);
+      return [];
+    }
+  },
+
+  checkDrugInteractions: async (patientId, medicines) => {
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await axios.post(`${API_URL}/ehr/prescription/check-interactions`, {
+        patientId,
+        medicines
+      }, { headers });
+      return res.data;
+    } catch (error) {
+      console.error('Error checking interactions:', error);
+      return [];
+    }
+  },
+
+  generatePrescriptionPDF: async (id) => {
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await axios.post(`${API_URL}/ehr/prescription/${id}/pdf`, {}, { headers });
+      return res.data.pdf_url;
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      return null;
     }
   },
 }));
