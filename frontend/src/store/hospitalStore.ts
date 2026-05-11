@@ -5,11 +5,41 @@ import {
   doctors as initialDoctors, 
   patients as initialPatients, 
   documents as initialDocuments, 
-  notes as initialNotes 
+  notes as initialNotes,
+  appointments as initialAppointments
 } from '../lib/mockData';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 const BASE_URL = import.meta.env.VITE_BASE_URL || 'http://localhost:8000';
+
+const mapAppointment = (app: any) => ({
+  id: app.id,
+  patientId: app.patient_id,
+  doctorId: app.doctor_id,
+  patientName: app.patient_name || 'Unknown Patient',
+  doctorName: app.doctor_name || 'Unknown Doctor',
+  departmentName: app.department_name || '',
+  date: app.appointment_date,
+  time: app.appointment_time,
+  status: app.status,
+  type: app.type,
+  token: app.token,
+  reason: app.cancellation_reason || ''
+});
+
+const mapOTBooking = (b: any) => ({
+  id: b.id,
+  patientName: b.patient_name || 'Unknown Patient',
+  surgeonName: b.surgeon_name || 'Unknown Surgeon',
+  theatreId: b.theatre_id,
+  surgeryName: b.surgery_name,
+  surgeryDate: b.surgery_date,
+  startTime: b.start_time,
+  endTime: b.end_time,
+  type: b.type,
+  status: b.status,
+  notes: b.notes || ''
+});
 
 interface HospitalState {
   departments: Department[];
@@ -17,6 +47,9 @@ interface HospitalState {
   patients: Patient[];
   documents: Document[];
   notes: Note[];
+  appointments: Appointment[];
+  otBookings: OTBooking[];
+  otStats: OTStats | null;
   prescriptions: Prescription[];
   timeline: any[];
   isLoading: boolean;
@@ -36,9 +69,15 @@ interface HospitalState {
       records: string;
     };
   } | null;
+  reports: {
+    workload: { doctor: string, patients: number }[];
+    volume: { date: string, count: number }[];
+    summary: { total_appointments: number, unique_doctors: number };
+  } | null;
   
   // Stats Actions
   fetchStats: () => Promise<void>;
+  fetchReports: (startDate: string, endDate: string) => Promise<void>;
   
   // Department Actions
   fetchDepartments: () => Promise<void>;
@@ -93,6 +132,19 @@ interface HospitalState {
   
   // Timeline Actions
   fetchPatientTimeline: (patientId: string) => Promise<any[]>;
+
+  // Appointment Actions
+  fetchAppointments: () => Promise<void>;
+  bookAppointment: (data: any) => Promise<void>;
+  cancelAppointment: (id: string, reason: string) => Promise<void>;
+  rescheduleAppointment: (id: string, date: string, time: string) => Promise<void>;
+  updateAppointmentStatus: (id: string, status: string) => Promise<void>;
+
+  // OT Actions
+  fetchOTBookings: (filters?: any) => Promise<void>;
+  bookOT: (data: any) => Promise<void>;
+  updateOTStatus: (id: string, status: string) => Promise<void>;
+  fetchOTStats: () => Promise<void>;
 }
 
 export const useHospitalStore = create<HospitalState>((set, get) => ({
@@ -104,10 +156,14 @@ export const useHospitalStore = create<HospitalState>((set, get) => ({
   studies: [],
   studyRepository: [],
   notes: initialNotes,
+  appointments: [],
+  otBookings: [],
+  otStats: null,
   prescriptions: [],
   timeline: [],
   isLoading: false,
   stats: null,
+  reports: null,
 
   fetchStats: async () => {
     const token = localStorage.getItem('token');
@@ -124,9 +180,27 @@ export const useHospitalStore = create<HospitalState>((set, get) => ({
     }
   },
 
+  fetchReports: async (startDate: string, endDate: string) => {
+    set({ isLoading: true });
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch(`${API_URL}/stats/reports?start_date=${startDate}&end_date=${endDate}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        set({ reports: data });
+      }
+    } catch (error) {
+      console.error('Fetch reports error:', error);
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
   fetchDepartments: async () => {
     try {
-      const response = await fetch(`${API_URL}/departments`);
+      const response = await fetch(`${API_URL}/departments/`);
       if (response.ok) {
         const data = await response.json();
         set({ departments: data });
@@ -152,7 +226,7 @@ export const useHospitalStore = create<HospitalState>((set, get) => ({
       if (filters.specialization) params.append('specialization', filters.specialization);
       if (filters.department_id) params.append('department_id', filters.department_id);
       
-      const response = await fetch(`${API_URL}/doctors?${params.toString()}`);
+      const response = await fetch(`${API_URL}/doctors/?${params.toString()}`);
       if (response.ok) {
         const data = await response.json();
         // Add random status for UI since backend doesn't track it yet
@@ -172,7 +246,7 @@ export const useHospitalStore = create<HospitalState>((set, get) => ({
   addDoctor: async (doctorData) => {
     const token = localStorage.getItem('token');
     try {
-      const response = await fetch(`${API_URL}/doctors`, {
+      const response = await fetch(`${API_URL}/doctors/`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -286,14 +360,14 @@ export const useHospitalStore = create<HospitalState>((set, get) => ({
       if (filters.status) params.append('status', filters.status);
       if (filters.doctor_id) params.append('doctor_id', filters.doctor_id);
       
-      const response = await fetch(`${API_URL}/patients?${params.toString()}`, {
+      const response = await fetch(`${API_URL}/patients/?${params.toString()}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
         const data = await response.json();
         // Map backend fields to frontend fields
-        const mappedPatients = data.map((p: any) => ({
-          id: p.id,
+        const mappedPatients = data.map((p: any, idx: number) => ({
+          id: p.id || `temp-p-${idx}`,
           mrn: p.mrn,
           name: p.full_name,
           dob: p.dob,
@@ -319,7 +393,7 @@ export const useHospitalStore = create<HospitalState>((set, get) => ({
   addPatient: async (patientData) => {
     const token = localStorage.getItem('token');
     try {
-      const response = await fetch(`${API_URL}/patients`, {
+      const response = await fetch(`${API_URL}/patients/`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -784,6 +858,292 @@ export const useHospitalStore = create<HospitalState>((set, get) => ({
       }
     } catch (error) {
       console.error('Delete study error:', error);
+    }
+  },
+
+  // Appointment Implementation
+  fetchAppointments: async () => {
+    set({ isLoading: true });
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch(`${API_URL}/appointments/`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const mappedAppointments = data.map(mapAppointment);
+        const uniqueAppointments = mappedAppointments.filter((app: any, index: number, self: any[]) => 
+          index === self.findIndex((a: any) => 
+            a.patientId === app.patientId && 
+            a.doctorId === app.doctorId && 
+            a.date === app.date && 
+            a.time === app.time
+          )
+        );
+        set({ appointments: uniqueAppointments });
+      } else {
+        import('sonner').then(({ toast }) => toast.error('Failed to load appointments from server.'));
+      }
+    } catch (error) {
+      import('sonner').then(({ toast }) => toast.error('Network error while loading appointments.'));
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  bookAppointment: async (data: any) => {
+    const token = localStorage.getItem('token');
+    try {
+      // Map camelCase to snake_case for backend
+      const payload = {
+        patient_id: data.patientId,
+        doctor_id: data.doctorId,
+        department_id: data.departmentId,
+        appointment_date: data.date,
+        appointment_time: data.time,
+        type: data.type,
+        reason: data.reason
+      };
+
+      const response = await fetch(`${API_URL}/appointments/`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload),
+      });
+      
+      if (response.ok) {
+        const rawApp = await response.json();
+        const newApp = mapAppointment(rawApp);
+        set((state) => {
+          const exists = state.appointments.some((a: any) => 
+            a.patientId === newApp.patientId && 
+            a.doctorId === newApp.doctorId && 
+            a.date === newApp.date && 
+            a.time === newApp.time
+          );
+          if (exists) return state;
+          return { appointments: [newApp, ...state.appointments] };
+        });
+        
+        import('sonner').then(({ toast }) => {
+          toast.success('Appointment booked successfully!', {
+            description: `Token: ${newApp.token}`,
+          });
+        });
+      } else {
+        const err = await response.json();
+        throw new Error(err.detail || 'Failed to book appointment');
+      }
+    } catch (error: any) {
+      console.error('Book appointment error:', error);
+      import('sonner').then(({ toast }) => toast.error(error.message || 'Failed to book appointment'));
+      throw error;
+    }
+  },
+
+  cancelAppointment: async (id: string, reason: string) => {
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch(`${API_URL}/appointments/${id}`, {
+        method: 'PATCH',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ status: 'Cancelled', cancellation_reason: reason }),
+      });
+      
+      if (response.ok) {
+        const rawApp = await response.json();
+        const updatedApp = mapAppointment(rawApp);
+        set((state) => ({
+          appointments: state.appointments.map((app) => 
+            app.id === id ? updatedApp : app
+          )
+        }));
+        import('sonner').then(({ toast }) => toast.info('Appointment cancelled'));
+      } else {
+        const err = await response.json().catch(() => ({}));
+        import('sonner').then(({ toast }) => toast.error(err.detail || 'Failed to cancel appointment.'));
+      }
+    } catch (error) {
+      import('sonner').then(({ toast }) => toast.error('Connection error. Could not cancel appointment.'));
+    }
+  },
+
+  rescheduleAppointment: async (id: string, date: string, time: string) => {
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch(`${API_URL}/appointments/${id}`, {
+        method: 'PATCH',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ appointment_date: date, appointment_time: time, status: 'Rescheduled' }),
+      });
+      
+      if (response.ok) {
+        const rawApp = await response.json();
+        const updatedApp = mapAppointment(rawApp);
+        set((state) => ({
+          appointments: state.appointments.map((app) => 
+            app.id === id ? updatedApp : app
+          )
+        }));
+        import('sonner').then(({ toast }) => toast.success('Appointment rescheduled'));
+      } else {
+        const err = await response.json().catch(() => ({}));
+        import('sonner').then(({ toast }) => toast.error(err.detail || 'Failed to reschedule appointment.'));
+      }
+    } catch (error) {
+      import('sonner').then(({ toast }) => toast.error('Connection error. Could not reschedule appointment.'));
+    }
+  },
+
+  updateAppointmentStatus: async (id: string, status: string) => {
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch(`${API_URL}/appointments/${id}`, {
+        method: 'PATCH',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ status }),
+      });
+      
+      if (response.ok) {
+        const rawApp = await response.json();
+        const updatedApp = mapAppointment(rawApp);
+        set((state) => ({
+          appointments: state.appointments.map((app) => 
+            app.id === id ? updatedApp : app
+          )
+        }));
+        import('sonner').then(({ toast }) => toast.success(`Appointment marked as ${status}`));
+      } else {
+        const err = await response.json().catch(() => ({}));
+        import('sonner').then(({ toast }) => toast.error(err.detail || 'Failed to update status.'));
+      }
+    } catch (error) {
+      import('sonner').then(({ toast }) => toast.error('Connection error. Could not update status.'));
+    }
+  },
+
+  // OT Implementation
+  fetchOTBookings: async (filters = {}) => {
+    set({ isLoading: true });
+    const token = localStorage.getItem('token');
+    try {
+      const params = new URLSearchParams();
+      if (filters.date) params.append('date', filters.date);
+      if (filters.theatre_id) params.append('theatre_id', filters.theatre_id);
+      
+      const response = await fetch(`${API_URL}/ot/bookings/?${params.toString()}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const mappedBookings = data.map(mapOTBooking);
+        const uniqueBookings = mappedBookings.filter((b: any, index: number, self: any[]) => 
+          index === self.findIndex((o: any) => 
+            o.theatreId === b.theatreId && 
+            o.surgeryDate === b.surgeryDate && 
+            o.startTime === b.startTime
+          )
+        );
+        set({ otBookings: uniqueBookings });
+      } else {
+        import('sonner').then(({ toast }) => toast.error('Failed to load OT schedule.'));
+      }
+    } catch (error) {
+      import('sonner').then(({ toast }) => toast.error('Network error while loading OT data.'));
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  bookOT: async (data: any) => {
+    const token = localStorage.getItem('token');
+    try {
+      // Map camelCase to snake_case for backend
+      const payload = {
+        patient_id: data.patientId,
+        surgeon_id: data.surgeonId,
+        theatre_id: data.theatreId,
+        surgery_name: data.surgeryName,
+        surgery_date: data.surgeryDate,
+        start_time: data.startTime,
+        end_time: data.endTime,
+        type: data.type,
+        notes: data.notes
+      };
+
+      const response = await fetch(`${API_URL}/ot/bookings`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload),
+      });
+      
+      if (response.ok) {
+        const rawBooking = await response.json();
+        const newBooking = mapOTBooking(rawBooking);
+        set((state) => ({ otBookings: [newBooking, ...state.otBookings] }));
+        import('sonner').then(({ toast }) => toast.success('OT scheduled successfully'));
+      } else {
+        const err = await response.json();
+        throw new Error(err.detail || 'Failed to schedule OT');
+      }
+    } catch (error: any) {
+      import('sonner').then(({ toast }) => toast.error(error.message));
+      throw error;
+    }
+  },
+
+  updateOTStatus: async (id: string, status: string) => {
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch(`${API_URL}/ot/bookings/${id}`, {
+        method: 'PATCH',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ status }),
+      });
+      
+      if (response.ok) {
+        const rawUpdated = await response.json();
+        const updated = mapOTBooking(rawUpdated);
+        set((state) => ({
+          otBookings: state.otBookings.map((b) => b.id === id ? updated : b)
+        }));
+      }
+    } catch (error) {
+      console.error('Update OT status error:', error);
+    }
+  },
+
+  fetchOTStats: async (date?: string) => {
+    const token = localStorage.getItem('token');
+    try {
+      const url = date ? `${API_URL}/ot/stats/?date=${date}` : `${API_URL}/ot/stats/`;
+      const response = await fetch(url, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        set({ otStats: data });
+      }
+    } catch (error) {
+      console.error('Fetch OT stats error:', error);
     }
   },
 }));

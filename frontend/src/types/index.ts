@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-export type UserRole = 'Admin' | 'Doctor';
+export type UserRole = 'Admin' | 'Doctor' | 'Patient';
 
 export interface User {
   id: string;
@@ -168,4 +168,47 @@ export interface DocumentStudy {
   mrn?: string;
   appId?: string;
   filesCount?: number;
+}
+
+export interface Appointment {
+  id: string;
+  patientId: string;
+  patientName: string;
+  doctorId: string;
+  doctorName: string;
+  departmentName: string;
+  date: string;
+  time: string;
+  status: 'Upcoming' | 'Completed' | 'Cancelled' | 'Rescheduled';
+  type: 'Consultation' | 'Follow-up' | 'Emergency';
+  token: string;
+  reason?: string;
+  cancellationReason?: string;
+  createdAt: string;
+}
+
+export interface OTBooking {
+  id: string;
+  patientId: string;
+  patientName: string;
+  surgeonId: string;
+  surgeonName: string;
+  theatreId: string;
+  surgeryName: string;
+  surgeryDate: string;
+  startTime: string;
+  endTime: string;
+  status: 'Scheduled' | 'In Progress' | 'Completed' | 'Cancelled' | 'Postponed';
+  type: 'Planned' | 'Emergency';
+  notes?: string;
+  createdAt: string;
+}
+
+export interface OTStats {
+  total_surgeries: number;
+  usage_hours: number;
+  occupancy_rate: number;
+  emergency_count: number;
+  planned_count: number;
+  cancelled_count: number;
 }

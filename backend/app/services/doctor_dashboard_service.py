@@ -117,6 +117,21 @@ class DoctorDashboardService:
                 }
             })
 
+        # 5. Appointments
+        apps = await db.appointments.find({"patient_id": ObjectId(patient_id)}).to_list(100)
+        for app in apps:
+            timeline.append({
+                "type": "appointment",
+                "timestamp": app["created_at"],
+                "data": {
+                    "date": app["appointment_date"],
+                    "time": app["appointment_time"],
+                    "status": app["status"],
+                    "doctor_id": str(app["doctor_id"]),
+                    "token": app["token"]
+                }
+            })
+
         # Sort combined timeline descending by timestamp
         timeline.sort(key=lambda x: x["timestamp"], reverse=True)
         return timeline

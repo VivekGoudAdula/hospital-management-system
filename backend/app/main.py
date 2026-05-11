@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 import os
 from .config.db import connect_to_mongo, close_mongo_connection
 from .config.settings import settings
-from .routes import auth_routes, department_routes, doctor_routes, patient_routes, document_routes, stats_routes, notes_routes, doctor_dashboard_routes, prescription_routes, ehr_routes, soap_routes, diagnosis_routes
+from .routes import auth_routes, department_routes, doctor_routes, patient_routes, document_routes, stats_routes, notes_routes, doctor_dashboard_routes, prescription_routes, ehr_routes, soap_routes, diagnosis_routes, appointment_routes, ot_routes
 
 app = FastAPI(title="ApexCare Backend")
 
@@ -55,6 +55,8 @@ app.include_router(doctor_dashboard_routes.router, prefix="/api")
 app.include_router(ehr_routes.router, prefix="/api")
 app.include_router(soap_routes.router, prefix="/api")
 app.include_router(diagnosis_routes.router, prefix="/api")
+app.include_router(appointment_routes.router, prefix="/api")
+app.include_router(ot_routes.router, prefix="/api")
 
 @app.get("/")
 async def root():

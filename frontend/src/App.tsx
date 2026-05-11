@@ -3,7 +3,9 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import MainLayout from './components/layout/MainLayout';
 import Dashboard from './pages/Dashboard';
 import Departments from './pages/Departments';
+import Appointments from './pages/Appointments';
 import Doctors from './pages/Doctors';
+import OTScheduling from './pages/OTScheduling';
 import Patients from './pages/Patients';
 import PatientDetail from './pages/PatientDetail';
 import PrescriptionEditor from './pages/PrescriptionEditor';
@@ -12,6 +14,7 @@ import Settings from './pages/Settings';
 import Login from './pages/Login';
 import EHRDashboard from './pages/ehr/EHRDashboard';
 import EHRWorkspace from './pages/ehr/EHRWorkspace';
+import SelfBooking from './pages/SelfBooking';
 import { useAuthStore } from './store';
 
 const PrivateRoute = ({ children, adminOnly = false }: { children: React.ReactNode, adminOnly?: boolean }) => {
@@ -41,11 +44,14 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={!isAuthenticated ? <Login /> : <Navigate to={getHomeRedirect()} />} />
+        <Route path="/book" element={<SelfBooking />} />
         
         <Route element={<PrivateRoute><MainLayout /></PrivateRoute>}>
           <Route path="/" element={<Navigate to={getHomeRedirect()} />} />
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/appointments" element={<Appointments />} />
           <Route path="/doctor/dashboard" element={<Dashboard />} />
+          <Route path="/ot" element={<OTScheduling />} />
           <Route path="/patients" element={<Patients />} />
           <Route path="/patients/:id" element={<PatientDetail />} />
           <Route path="/patients/:id/prescription" element={<PrescriptionEditor />} />

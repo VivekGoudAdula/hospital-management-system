@@ -11,7 +11,9 @@ import {
   ChevronRight,
   Stethoscope,
   LogOut,
-  Activity
+  Activity,
+  Calendar,
+  Scissors
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -25,9 +27,11 @@ const Sidebar = () => {
 
   const menuItems = [
     { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard', roles: ['Admin', 'Doctor'] },
+    { name: 'Appointments', icon: Calendar, path: '/appointments', roles: ['Admin', 'Doctor'] },
     { name: 'Departments', icon: Building2, path: '/departments', roles: ['Admin'] },
     { name: 'Doctors', icon: UserRound, path: '/doctors', roles: ['Admin'] },
     { name: 'Patients', icon: Users, path: '/patients', roles: ['Admin', 'Doctor'] },
+    { name: 'OT Scheduling', icon: Scissors, path: '/ot', roles: ['Admin', 'Doctor'] },
     { name: 'Documents', icon: Files, path: '/documents', roles: ['Admin', 'Doctor'] },
     { name: 'EHR', icon: Activity, path: '/ehr', roles: ['Admin', 'Doctor'] },
     { name: 'Settings', icon: Settings, path: '/settings', roles: ['Admin', 'Doctor'] },
@@ -46,7 +50,7 @@ const Sidebar = () => {
       initial={false}
       animate={{ width: isSidebarOpen ? 240 : 80 }}
       className={cn(
-        "relative h-screen bg-white border-r border-slate-200 transition-all duration-300 ease-in-out flex flex-col z-50",
+        "sticky top-0 h-screen bg-white border-r border-slate-200 transition-all duration-300 ease-in-out flex flex-col z-50",
         !isSidebarOpen && "items-center"
       )}
     >
