@@ -1,0 +1,42 @@
+[
+  {
+    "code": "J18.9",
+    "label": "Pneumonia, unspecified organism",
+    "keywords": ["pneumonia", "lung", "infection"]
+  },
+  {
+    "code": "E11.9",
+    "label": "Type 2 diabetes mellitus without complications",
+    "keywords": ["diabetes", "sugar", "t2dm"]
+  },
+  {
+    "code": "I10",
+    "label": "Essential (primary) hypertension",
+    "keywords": ["hypertension", "blood pressure", "bp"]
+  },
+  {
+    "code": "J45.909",
+    "label": "Unspecified asthma, uncomplicated",
+    "keywords": ["asthma", "breathing", "wheezing"]
+  },
+  {
+    "code": "M54.5",
+    "label": "Low back pain",
+    "keywords": ["back pain", "lumbago"]
+  },
+  {
+    "code": "K21.9",
+    "label": "Gastro-esophageal reflux disease without esophagitis",
+    "keywords": ["gerd", "reflux", "heartburn"]
+  },
+  {
+    "code": "F32.9",
+    "label": "Major depressive disorder, single episode, unspecified",
+    "keywords": ["depression", "mood"]
+  },
+  {
+    "code": "N39.0",
+    "label": "Urinary tract infection, site not specified",
+    "keywords": ["uti", "urinary", "infection"]
+  }
+]

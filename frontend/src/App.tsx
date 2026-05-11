@@ -10,6 +10,8 @@ import PrescriptionEditor from './pages/PrescriptionEditor';
 import Documents from './pages/Documents';
 import Settings from './pages/Settings';
 import Login from './pages/Login';
+import EHRDashboard from './pages/ehr/EHRDashboard';
+import EHRWorkspace from './pages/ehr/EHRWorkspace';
 import { useAuthStore } from './store';
 
 const PrivateRoute = ({ children, adminOnly = false }: { children: React.ReactNode, adminOnly?: boolean }) => {
@@ -49,6 +51,9 @@ export default function App() {
           <Route path="/patients/:id/prescription" element={<PrescriptionEditor />} />
           <Route path="/documents" element={<Documents />} />
           <Route path="/settings" element={<Settings />} />
+          
+          <Route path="/ehr" element={<EHRDashboard />} />
+          <Route path="/ehr/:patientId" element={<EHRWorkspace />} />
           
           {/* Admin Protected Routes */}
           <Route path="/departments" element={<PrivateRoute adminOnly><Departments /></PrivateRoute>} />

@@ -10,7 +10,8 @@ import {
   ChevronLeft, 
   ChevronRight,
   Stethoscope,
-  LogOut
+  LogOut,
+  Activity
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -28,6 +29,7 @@ const Sidebar = () => {
     { name: 'Doctors', icon: UserRound, path: '/doctors', roles: ['Admin'] },
     { name: 'Patients', icon: Users, path: '/patients', roles: ['Admin', 'Doctor'] },
     { name: 'Documents', icon: Files, path: '/documents', roles: ['Admin', 'Doctor'] },
+    { name: 'EHR', icon: Activity, path: '/ehr', roles: ['Admin', 'Doctor'] },
     { name: 'Settings', icon: Settings, path: '/settings', roles: ['Admin', 'Doctor'] },
   ];
 

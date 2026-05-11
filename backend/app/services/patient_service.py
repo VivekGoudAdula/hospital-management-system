@@ -72,6 +72,7 @@ class PatientService:
         
         for patient in patients:
             patient["id"] = str(patient["_id"])
+            del patient["_id"]
             if patient.get("assigned_doctor_id"):
                 patient["assigned_doctor_id"] = str(patient["assigned_doctor_id"])
                 
@@ -84,6 +85,7 @@ class PatientService:
             raise HTTPException(status_code=404, detail="Patient not found")
         
         patient["id"] = str(patient["_id"])
+        del patient["_id"]
         if patient.get("assigned_doctor_id"):
             patient["assigned_doctor_id"] = str(patient["assigned_doctor_id"])
         return patient
