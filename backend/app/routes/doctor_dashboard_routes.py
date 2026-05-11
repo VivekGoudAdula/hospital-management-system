@@ -63,10 +63,20 @@ async def get_patient_detail(
     # Fetch notes
     notes = await notes_service.get_patient_notes(patient_id)
 
+    # Fetch appointments
+    appointments = await db.appointments.find({"patient_id": ObjectId(patient_id)}).sort("appointment_date", -1).to_list(100)
+    for app in appointments:
+        app["id"] = str(app["_id"])
+        if app.get("doctor_id"): app["doctor_id"] = str(app["doctor_id"])
+        if app.get("patient_id"): app["patient_id"] = str(app["patient_id"])
+        if app.get("department_id"): app["department_id"] = str(app["department_id"])
+        del app["_id"]
+
     return {
         "patient_info": patient,
         "documents": documents,
-        "notes": notes
+        "notes": notes,
+        "appointments": appointments
     }
 
 @router.get("/patients/{patient_id}/timeline")

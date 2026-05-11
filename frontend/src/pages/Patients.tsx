@@ -366,7 +366,7 @@ const Patients = () => {
               <AnimatePresence mode="popLayout">
                 {filteredPatients.map((patient, index) => (
                   <motion.tr 
-                    key={patient.id}
+                    key={patient.id || `pat-${index}`}
                     layout
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}

@@ -21,7 +21,7 @@ async def admin_required(current_user: dict = Depends(get_current_user)):
         )
     return current_user
 
-@router.post("", response_model=DepartmentResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=DepartmentResponse, status_code=status.HTTP_201_CREATED)
 async def create_department(
     data: DepartmentCreate,
     _: dict = Depends(admin_required)
@@ -29,7 +29,7 @@ async def create_department(
     """Create a new department (Admin only)."""
     return await department_service.create_department(data)
 
-@router.get("", response_model=List[DepartmentResponse])
+@router.get("/", response_model=List[DepartmentResponse])
 async def get_departments(search: Optional[str] = None):
     """Get all departments. Supports optional search by name or code."""
     return await department_service.get_departments(search or "")

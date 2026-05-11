@@ -9,6 +9,13 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440  # 24 hours (1 day)
     ALLOWED_ORIGINS: str = "http://localhost:5173,http://localhost:3000,https://apexcare-management.vercel.app"
 
+    # SMTP Settings
+    SMTP_SERVER: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USER: Optional[str] = None
+    SMTP_PASSWORD: Optional[str] = None
+    SMTP_FROM: str = "ApexCare Hospital <no-reply@apexcare.com>"
+
     class Config:
         env_file = ".env"
 

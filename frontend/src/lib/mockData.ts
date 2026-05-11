@@ -1,4 +1,4 @@
-import { Department, Doctor, Patient, Document, Note } from '../types';
+import { Department, Doctor, Patient, Document, Note, Appointment } from '../types';
 
 export const departments: Department[] = [
   {
@@ -167,5 +167,36 @@ export const notes: Note[] = [
     authorName: 'Dr. Sarah Johnson',
     content: 'Patient responded well to the new medication. Monitor blood pressure daily.',
     createdAt: '2024-04-25T10:30:00Z',
+  },
+];
+
+export const appointments: Appointment[] = [
+  {
+    id: 'a1',
+    patientId: 'p1',
+    patientName: 'John Smith',
+    doctorId: 'd1',
+    doctorName: 'Dr. Sarah Johnson',
+    departmentName: 'Cardiology',
+    date: '2026-05-12',
+    time: '10:00',
+    status: 'Upcoming',
+    type: 'Consultation',
+    token: 'TKN-1001',
+    createdAt: '2026-05-10T10:00:00Z',
+  },
+  {
+    id: 'a2',
+    patientId: 'p2',
+    patientName: 'Alice Williams',
+    doctorId: 'd2',
+    doctorName: 'Dr. Michael Chen',
+    departmentName: 'Neurology',
+    date: '2026-05-13',
+    time: '14:30',
+    status: 'Upcoming',
+    type: 'Follow-up',
+    token: 'TKN-1002',
+    createdAt: '2026-05-10T11:00:00Z',
   },
 ];

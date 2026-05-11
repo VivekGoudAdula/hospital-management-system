@@ -26,12 +26,12 @@ async def doctor_or_admin_required(doctor_id: str, current_user: dict = Depends(
         detail="You do not have permission to access this resource"
     )
 
-@router.post("", response_model=DoctorResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=DoctorResponse, status_code=status.HTTP_201_CREATED)
 async def create_doctor(data: DoctorCreate, _: dict = Depends(admin_required)):
     """Create a new doctor (Admin only)."""
     return await doctor_service.create_doctor(data)
 
-@router.get("", response_model=List[DoctorResponse])
+@router.get("/", response_model=List[DoctorResponse])
 async def get_doctors(
     name: Optional[str] = Query(None),
     specialization: Optional[str] = Query(None),

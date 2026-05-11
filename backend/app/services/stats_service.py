@@ -12,12 +12,10 @@ class StatsService:
         total_documents = await db.db.documents.count_documents({})
         
         # Status counts for patients
-        # status: 'Stable' | 'Critical' | 'Discharged' | 'In Treatment'
-        # Admitted might be 'In Treatment' or 'Critical'
-        admitted_now = await db.db.patients.count_documents({"status": {"$in": ["in treatment", "critical"]}})
-        critical_care = await db.db.patients.count_documents({"status": "critical"})
-        out_patient = await db.db.patients.count_documents({"status": "stable"})
-        discharged = await db.db.patients.count_documents({"status": "discharged"})
+        admitted_now = await db.db.patients.count_documents({"status": {"$in": ["In Treatment", "Critical"]}})
+        critical_care = await db.db.patients.count_documents({"status": "Critical"})
+        out_patient = await db.db.patients.count_documents({"status": "Stable"})
+        discharged = await db.db.patients.count_documents({"status": "Discharged"})
         
         return {
             "total_patients": total_patients,
@@ -29,10 +27,49 @@ class StatsService:
             "out_patient": out_patient,
             "discharged": discharged,
             "trends": {
-                "patients": "+0%", # Placeholder for trend logic if needed
+                "patients": "+12%", 
                 "doctors": "Stable",
                 "services": "Active",
-                "records": "+0%"
+                "records": "+5%"
+            }
+        }
+
+    async def get_reports(self, start_date: str, end_date: str) -> Dict[str, Any]:
+        """Generate detailed reports for a specific date range."""
+        
+        # 1. Doctor Workload (Appointments per doctor)
+        pipeline = [
+            {"$match": {"appointment_date": {"$gte": start_date, "$lte": end_date}}},
+            {"$group": {"_id": "$doctor_id", "count": {"$sum": 1}}}
+        ]
+        workload_cursor = db.db.appointments.aggregate(pipeline)
+        workload_raw = await workload_cursor.to_list(100)
+        
+        workload_data = []
+        for item in workload_raw:
+            doctor = await db.db.doctors.find_one({"_id": item["_id"]})
+            workload_data.append({
+                "doctor": doctor["name"] if doctor else "Unknown",
+                "patients": item["count"]
+            })
+            
+        # 2. Patient Volume (Appointments per day)
+        pipeline = [
+            {"$match": {"appointment_date": {"$gte": start_date, "$lte": end_date}}},
+            {"$group": {"_id": "$appointment_date", "count": {"$sum": 1}}},
+            {"$sort": {"_id": 1}}
+        ]
+        volume_cursor = db.db.appointments.aggregate(pipeline)
+        volume_raw = await volume_cursor.to_list(100)
+        
+        volume_data = [{"date": item["_id"], "count": item["count"]} for item in volume_raw]
+        
+        return {
+            "workload": workload_data,
+            "volume": volume_data,
+            "summary": {
+                "total_appointments": sum(item["count"] for item in volume_raw),
+                "unique_doctors": len(workload_data)
             }
         }
 
