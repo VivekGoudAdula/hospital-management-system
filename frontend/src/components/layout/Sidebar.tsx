@@ -27,13 +27,13 @@ const Sidebar = () => {
 
   const menuItems = [
     { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard', roles: ['Admin', 'Doctor'] },
-    { name: 'Appointments', icon: Calendar, path: '/appointments', roles: ['Admin', 'Doctor'] },
-    { name: 'Departments', icon: Building2, path: '/departments', roles: ['Admin'] },
-    { name: 'Doctors', icon: UserRound, path: '/doctors', roles: ['Admin'] },
     { name: 'Patients', icon: Users, path: '/patients', roles: ['Admin', 'Doctor'] },
+    { name: 'Appointments', icon: Calendar, path: '/appointments', roles: ['Admin', 'Doctor'] },
+    { name: 'EHR', icon: Activity, path: '/ehr', roles: ['Admin', 'Doctor'] },
     { name: 'OT Scheduling', icon: Scissors, path: '/ot', roles: ['Admin', 'Doctor'] },
     { name: 'Documents', icon: Files, path: '/documents', roles: ['Admin', 'Doctor'] },
-    { name: 'EHR', icon: Activity, path: '/ehr', roles: ['Admin', 'Doctor'] },
+    { name: 'Departments', icon: Building2, path: '/departments', roles: ['Admin'] },
+    { name: 'Doctors', icon: UserRound, path: '/doctors', roles: ['Admin'] },
     { name: 'Settings', icon: Settings, path: '/settings', roles: ['Admin', 'Doctor'] },
   ];
 
@@ -72,21 +72,29 @@ const Sidebar = () => {
         )}
       </div>
 
-      <nav className="flex-1 px-4 space-y-1">
+      <nav className="flex-1 px-4 py-6 space-y-2.5">
         {filteredItems.map((item) => (
           <NavLink
             key={item.path}
             to={item.path}
             className={({ isActive }) => cn(
-              "flex items-center px-3 py-2 rounded-md transition-all duration-200 group",
+              "flex items-center px-4 py-3.5 rounded-2xl transition-all duration-300 group font-bold text-sm",
               isActive 
-                ? "bg-indigo-50 text-indigo-600 font-medium" 
-                : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                ? "bg-indigo-600 text-white shadow-lg shadow-indigo-200/50 scale-[1.02]" 
+                : "text-slate-500 hover:bg-indigo-50/80 hover:text-indigo-700"
             )}
           >
-            <item.icon className={cn("h-5 w-5", isSidebarOpen && "mr-3")} />
-            {isSidebarOpen && (
-              <span className="text-sm">{item.name}</span>
+            {({ isActive }) => (
+              <>
+                <item.icon className={cn(
+                  "h-5 w-5 transition-transform duration-300 group-hover:scale-110", 
+                  isSidebarOpen && "mr-4",
+                  isActive ? "text-white" : "text-indigo-400 group-hover:text-indigo-600"
+                )} />
+                {isSidebarOpen && (
+                  <span className="tracking-wide">{item.name}</span>
+                )}
+              </>
             )}
           </NavLink>
         ))}

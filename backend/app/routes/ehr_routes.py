@@ -8,6 +8,7 @@ from ..schemas.referral_schema import ReferralCreate, ReferralUpdate, ReferralRe
 from ..schemas.document_study_schema import DocumentStudyCreate, DocumentStudyUpdate, DocumentStudyResponse
 from ..schemas.patient_schema import PatientResponse
 from ..utils.dependencies import get_current_user
+from ..services.workflow_service import workflow_service
 
 router = APIRouter(prefix="/ehr", tags=["EHR"])
 
@@ -26,6 +27,24 @@ async def doctor_admin_only(current_user: dict = Depends(get_current_user)):
             detail="This action is restricted to Doctors and Admins"
         )
     return current_user
+
+# ── Workflow Routes ──────────────────────────────────────────────────
+
+@router.post("/workflow/check-in/{appointment_id}", response_model=VisitResponse)
+async def check_in_patient(appointment_id: str, current_user: dict = Depends(get_current_user)):
+    return await workflow_service.check_in_patient(appointment_id, str(current_user["_id"]))
+
+@router.post("/workflow/start-consultation/{visit_id}", response_model=VisitResponse)
+async def start_consultation(visit_id: str, current_user: dict = Depends(ehr_access_required)):
+    return await workflow_service.start_consultation(visit_id, str(current_user["_id"]))
+
+@router.post("/workflow/complete-visit/{visit_id}", response_model=VisitResponse)
+async def complete_visit(visit_id: str, current_user: dict = Depends(doctor_admin_only)):
+    return await workflow_service.complete_visit(visit_id, str(current_user["_id"]))
+
+@router.get("/workflow/discharge-summary/{visit_id}")
+async def get_discharge_summary(visit_id: str, current_user: dict = Depends(ehr_access_required)):
+    return await workflow_service.generate_discharge_summary_data(visit_id)
 
 @router.get("/visits/{id}", response_model=VisitResponse)
 async def get_visit(id: str, current_user: dict = Depends(ehr_access_required)):

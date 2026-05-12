@@ -10,16 +10,20 @@ class VisitDB(BaseModel):
     """Represents a visit document in the 'visits' collection."""
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
     patient_id: PyObjectId
+    appointment_id: Optional[PyObjectId] = None
     doctor_id: Optional[PyObjectId] = None
     department_id: Optional[PyObjectId] = None
     
     visit_type: str = "OPD"  # OPD | IPD
-    status: str = "active"  # active | completed | cancelled
+    status: str = "Waiting"  # Waiting | Active | In Progress | Referred | Admitted | Discharged | Closed
     
+    token_number: Optional[str] = None
     chief_complaint: Optional[str] = None
     
-    admission_date: datetime = Field(default_factory=datetime.utcnow)
-    discharge_date: Optional[datetime] = None
+    started_at: datetime = Field(default_factory=datetime.utcnow)
+    completed_at: Optional[datetime] = None
+    
+    discharge_summary_id: Optional[PyObjectId] = None
     
     created_by: PyObjectId
     created_at: datetime = Field(default_factory=datetime.utcnow)

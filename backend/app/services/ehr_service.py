@@ -66,7 +66,7 @@ class EHRService:
         else:
             visit["created_by"] = "System"
             
-        return visit
+        return self._serialize_ids(visit)
 
     async def get_active_visit(self, patient_id: str) -> Optional[Dict[str, Any]]:
         db = get_database()

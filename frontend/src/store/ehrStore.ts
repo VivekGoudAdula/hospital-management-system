@@ -8,13 +8,16 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 export interface Visit {
   id: string;
   patient_id: string;
+  appointment_id?: string;
   doctor_id?: string;
   department_id?: string;
   visit_type: string;
   status: string;
+  token_number?: string;
   chief_complaint?: string;
-  admission_date: string;
-  discharge_date?: string;
+  started_at: string;
+  completed_at?: string;
+  discharge_summary_id?: string;
 }
 
 export interface Patient {
@@ -233,10 +236,15 @@ interface EHRState {
   // EHR actions
   fetchPatientEHR: (patientId: string) => Promise<void>;
   fetchActiveVisit: (patientId: string) => Promise<void>;
-  createVisit: (patientId: string, doctorId: string) => Promise<void>;
+  createVisit: (patientId: string, doctor_id: string) => Promise<void>;
   fetchTimeline: (patientId: string) => Promise<void>;
   setSelectedTab: (tab: string) => void;
   reset: () => void;
+
+  // Workflow actions
+  checkInPatient: (appointmentId: string) => Promise<void>;
+  startConsultation: (visitId: string) => Promise<void>;
+  completeVisit: (visitId: string) => Promise<void>;
 
   // SOAP actions
   fetchSOAP: (visitId: string) => Promise<void>;
@@ -417,6 +425,51 @@ export const useEHRStore = create<EHRState>((set, get) => ({
       documentStudies: [],
       documentsLoading: false,
     }),
+
+  // ── Workflow actions ──────────────────────────────────────────────────
+
+  checkInPatient: async (appointmentId) => {
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await axios.post(`${API_URL}/ehr/workflow/check-in/${appointmentId}`, {}, { headers });
+      set({ currentVisit: res.data });
+      // If on EHR dashboard, refresh patient list
+    } catch (error) {
+      console.error('Error checking in patient:', error);
+      throw error;
+    }
+  },
+
+  startConsultation: async (visitId) => {
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await axios.post(`${API_URL}/ehr/workflow/start-consultation/${visitId}`, {}, { headers });
+      set({ currentVisit: res.data });
+      
+      const { currentPatient, fetchTimeline } = get();
+      if (currentPatient) fetchTimeline(currentPatient.id);
+    } catch (error) {
+      console.error('Error starting consultation:', error);
+      throw error;
+    }
+  },
+
+  completeVisit: async (visitId) => {
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await axios.post(`${API_URL}/ehr/workflow/complete-visit/${visitId}`, {}, { headers });
+      set({ currentVisit: res.data });
+      
+      const { currentPatient, fetchTimeline } = get();
+      if (currentPatient) fetchTimeline(currentPatient.id);
+    } catch (error) {
+      console.error('Error completing visit:', error);
+      throw error;
+    }
+  },
 
   // ── SOAP actions ─────────────────────────────────────────────────────────
 

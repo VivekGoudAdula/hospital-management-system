@@ -40,6 +40,7 @@ import ReferralPanel from './components/ReferralPanel';
 import DocumentRepository from './components/DocumentRepository';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import axios from 'axios';
 
 const EHRWorkspace = () => {
   const { patientId } = useParams();
@@ -64,6 +65,8 @@ const EHRWorkspace = () => {
     fetchReferrals,
     fetchDocumentStudies,
     setSelectedTab,
+    startConsultation,
+    completeVisit,
     reset 
   } = useEHRStore();
 
@@ -159,10 +162,129 @@ const EHRWorkspace = () => {
         </div>
 
         <div className="flex items-center gap-4">
-          <Button variant="outline" className="rounded-2xl border-slate-200 h-12 px-6 text-xs font-bold uppercase tracking-widest hover:bg-slate-50 transition-all shadow-sm">
-             <Share2 className="h-4 w-4 mr-2 text-indigo-500" /> Export Case
+          <Button 
+            variant="outline" 
+            className="rounded-2xl border-slate-200 h-12 px-6 text-xs font-bold uppercase tracking-widest hover:bg-slate-50 transition-all shadow-sm"
+            onClick={async () => {
+              if (!currentVisit?.id) return;
+              try {
+                const token = localStorage.getItem('token');
+                const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+                const { data } = await axios.get(`${API_URL}/ehr/workflow/discharge-summary/${currentVisit.id}`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
+                
+                const reportWindow = window.open('', '_blank');
+                if (!reportWindow) return;
+
+                const html = `
+                  <html>
+                    <head>
+                      <title>Discharge Summary - ${data.patient.name}</title>
+                      <style>
+                        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+                        body { font-family: 'Inter', sans-serif; padding: 60px; color: #1e293b; line-height: 1.5; }
+                        .header { border-bottom: 2px solid #4f46e5; padding-bottom: 20px; margin-bottom: 40px; display: flex; justify-content: space-between; align-items: center; }
+                        .logo { font-size: 28px; font-weight: 800; color: #4f46e5; letter-spacing: -0.5px; }
+                        .title { font-size: 14px; color: #64748b; text-transform: uppercase; letter-spacing: 2px; font-weight: 700; }
+                        .section { margin-bottom: 30px; }
+                        .label { font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.5px; }
+                        .value { font-size: 14px; font-weight: 500; color: #1e293b; }
+                        .grid { display: grid; grid-template-cols: 1fr 1fr; gap: 30px; }
+                        .footer { margin-top: 100px; border-top: 1px solid #e2e8f0; padding-top: 30px; font-size: 11px; color: #94a3b8; text-align: center; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+                        th, td { text-align: left; padding: 8px; border-bottom: 1px solid #e2e8f0; font-size: 13px; }
+                        th { color: #64748b; font-size: 11px; text-transform: uppercase; font-weight: 700; }
+                      </style>
+                    </head>
+                    <body>
+                      <div class="header">
+                        <div class="logo">ApexCare Health</div>
+                        <div class="title">Clinical Discharge Summary</div>
+                      </div>
+                      
+                      <div class="grid">
+                        <div class="section">
+                          <div class="label">Patient Details</div>
+                          <div class="value" style="font-size: 18px; font-weight: 700;">${data.patient.name}</div>
+                          <div class="value" style="color: #64748b; font-size: 12px; mt-1">MRN: ${data.patient.mrn} | ${data.patient.gender}</div>
+                        </div>
+                        <div class="section" style="text-align: right;">
+                          <div class="label">Visit Details</div>
+                          <div class="value font-mono">ID: ${data.visit.id}</div>
+                          <div class="value" style="color: #64748b; font-size: 12px;">Date: ${data.visit.started_at && !isNaN(new Date(data.visit.started_at).getTime()) ? format(new Date(data.visit.started_at), 'MMM dd, yyyy') : format(new Date(), 'MMM dd, yyyy')}</div>
+                        </div>
+                      </div>
+
+                      <div class="section" style="background: #f8fafc; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                        <div class="label">Chief Complaint</div>
+                        <div class="value font-bold">${data.visit.chief_complaint || 'N/A'}</div>
+                      </div>
+
+                      ${data.vitals ? `
+                      <div class="section">
+                        <div class="label">Latest Vitals</div>
+                        <div class="grid" style="grid-template-cols: repeat(4, 1fr); gap: 15px;">
+                          <div><span style="color:#64748b;font-size:10px;text-transform:uppercase;">BP</span><br><b>${data.vitals.blood_pressure || '-'}</b></div>
+                          <div><span style="color:#64748b;font-size:10px;text-transform:uppercase;">HR</span><br><b>${data.vitals.heart_rate || '-'} bpm</b></div>
+                          <div><span style="color:#64748b;font-size:10px;text-transform:uppercase;">Temp</span><br><b>${data.vitals.temperature || '-'} °F</b></div>
+                          <div><span style="color:#64748b;font-size:10px;text-transform:uppercase;">SpO2</span><br><b>${data.vitals.spo2 || '-'} %</b></div>
+                        </div>
+                      </div>` : ''}
+
+                      ${data.diagnoses && data.diagnoses.length > 0 ? `
+                      <div class="section">
+                        <div class="label">Diagnoses</div>
+                        <ul>
+                          ${data.diagnoses.map((d: any) => `<li><b>${d.code}</b>: ${d.description} - ${d.status}</li>`).join('')}
+                        </ul>
+                      </div>` : ''}
+
+                      ${data.prescriptions && data.prescriptions.length > 0 ? `
+                      <div class="section">
+                        <div class="label">Prescribed Medications</div>
+                        <table>
+                          <tr><th>Medication</th><th>Dosage</th><th>Frequency</th><th>Duration</th></tr>
+                          ${data.prescriptions.map((p: any) => p.medicines?.map((m: any) => `
+                            <tr><td>${m.medicine_name}</td><td>${m.dosage}</td><td>${m.frequency}</td><td>${m.duration}</td></tr>
+                          `).join('') || '').join('')}
+                        </table>
+                      </div>` : ''}
+
+                      <div class="footer">
+                        This is a system-generated discharge summary.<br>
+                        Electronically signed by Primary Physician.<br>
+                        Generated on: ${format(new Date(), 'PPP')}
+                      </div>
+                      <script>window.onload = () => window.print();</script>
+                    </body>
+                  </html>
+                `;
+
+                reportWindow.document.write(html);
+                reportWindow.document.close();
+              } catch (error) {
+                console.error(error);
+                toast.error('Failed to generate discharge summary');
+              }
+            }}
+          >
+             <FileText className="h-4 w-4 mr-2 text-indigo-500" /> Discharge Summary
           </Button>
-          <Button className="rounded-2xl bg-indigo-600 text-white shadow-xl shadow-indigo-200/50 h-12 px-8 text-xs font-bold uppercase tracking-widest hover:bg-indigo-700 transition-all active:scale-95">
+          <Button 
+            className="rounded-2xl bg-indigo-600 text-white shadow-xl shadow-indigo-200/50 h-12 px-8 text-xs font-bold uppercase tracking-widest hover:bg-indigo-700 transition-all active:scale-95"
+            onClick={async () => {
+              if (currentVisit?.id) {
+                try {
+                  await completeVisit(currentVisit.id);
+                  toast.success('Visit completed and signed.');
+                  navigate('/ehr');
+                } catch {
+                  toast.error('Failed to complete visit.');
+                }
+              }
+            }}
+          >
              Complete & Sign
           </Button>
         </div>
@@ -242,7 +364,7 @@ const EHRWorkspace = () => {
                                       <Clock className="h-5 w-5 text-indigo-100/60" />
                                    </div>
                                    <CardTitle className="text-3xl font-extrabold tracking-tight">Visit Management</CardTitle>
-                                   <p className="text-indigo-100/80 text-sm font-bold mt-2">Session initialized {currentVisit ? format(new Date(currentVisit.admission_date), 'MMM dd • hh:mm a') : '...'}</p>
+                                   <p className="text-indigo-100/80 text-sm font-bold mt-2">Session initialized {currentVisit && currentVisit.started_at && !isNaN(new Date(currentVisit.started_at).getTime()) ? format(new Date(currentVisit.started_at), 'MMM dd • hh:mm a') : '...'}</p>
                                 </CardHeader>
                                 <CardContent className="p-10 space-y-8">
                                    <div className="grid gap-6">
@@ -267,9 +389,19 @@ const EHRWorkspace = () => {
                                    </div>
                                    <Button 
                                      className="w-full rounded-2xl h-14 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm uppercase tracking-widest shadow-2xl shadow-indigo-200 transition-all active:scale-95"
-                                     onClick={() => setSelectedTab('SOAP')}
+                                     onClick={async () => {
+                                       if (currentVisit?.status === 'Waiting') {
+                                          try {
+                                            await startConsultation(currentVisit.id);
+                                            toast.success('Consultation started.');
+                                          } catch {
+                                            toast.error('Failed to start consultation.');
+                                          }
+                                       }
+                                       setSelectedTab('SOAP');
+                                     }}
                                    >
-                                      Initiate Clinical Assessment
+                                      {currentVisit?.status === 'Waiting' ? 'Start Consultation' : 'Initiate Clinical Assessment'}
                                    </Button>
                                 </CardContent>
                              </Card>

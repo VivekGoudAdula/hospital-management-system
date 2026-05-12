@@ -21,7 +21,7 @@ import {
   ChevronLeft
 } from 'lucide-react';
 import { useHospitalStore } from '@/store/hospitalStore';
-import { useAuthStore } from '@/store';
+import { useAuthStore, useEHRStore } from '@/store';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -80,6 +80,7 @@ const Appointments = () => {
     isLoading 
   } = useHospitalStore();
   
+  const { checkInPatient } = useEHRStore();
   const { user } = useAuthStore();
   
   const [activeTab, setActiveTab] = useState('upcoming');
@@ -830,11 +831,19 @@ const Appointments = () => {
                                   <DropdownMenuLabel>Actions</DropdownMenuLabel>
                                   <DropdownMenuSeparator />
                                   <DropdownMenuItem 
-                                    className="cursor-pointer"
-                                    onClick={() => updateAppointmentStatus(app.id, 'Arrived')}
+                                    className="cursor-pointer font-bold text-indigo-600"
+                                    onClick={async () => {
+                                      try {
+                                        await checkInPatient(app.id);
+                                        import('sonner').then(({ toast }) => toast.success('Patient checked in and visit session created!'));
+                                        fetchAppointments(); // refresh
+                                      } catch (error) {
+                                        import('sonner').then(({ toast }) => toast.error('Failed to check in patient.'));
+                                      }
+                                    }}
                                   >
-                                    <UserCheck className="w-4 h-4 mr-2 text-slate-500" />
-                                    Mark Arrived
+                                    <UserCheck className="w-4 h-4 mr-2" />
+                                    Check In (Start Visit)
                                   </DropdownMenuItem>
                                   <DropdownMenuItem 
                                     onClick={() => {
