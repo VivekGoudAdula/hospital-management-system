@@ -3,16 +3,27 @@ from typing import List, Optional
 from ..services.ehr_service import ehr_service
 from ..services.patient_service import patient_service
 from ..schemas.visit_schema import VisitCreate, VisitUpdate, VisitResponse, TimelineItem
+from ..schemas.lab_schema import LabOrderCreate, LabOrderUpdate, LabOrderResponse
+from ..schemas.referral_schema import ReferralCreate, ReferralUpdate, ReferralResponse
+from ..schemas.document_study_schema import DocumentStudyCreate, DocumentStudyUpdate, DocumentStudyResponse
 from ..schemas.patient_schema import PatientResponse
 from ..utils.dependencies import get_current_user
 
 router = APIRouter(prefix="/ehr", tags=["EHR"])
 
 async def ehr_access_required(current_user: dict = Depends(get_current_user)):
+    if current_user.get("role") not in ["admin", "doctor", "nurse"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="EHR access restricted to Clinical Staff (Admins, Doctors, Nurses)"
+        )
+    return current_user
+
+async def doctor_admin_only(current_user: dict = Depends(get_current_user)):
     if current_user.get("role") not in ["admin", "doctor"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="EHR access restricted to Admins and Doctors"
+            detail="This action is restricted to Doctors and Admins"
         )
     return current_user
 
@@ -73,3 +84,49 @@ async def get_ehr_patients(
         filters["doctor_id"] = current_user["doctor_id"]
         
     return await patient_service.get_patients(filters)
+
+# ── Lab Order Routes ──────────────────────────────────────────────────
+
+@router.post("/labs/order", response_model=LabOrderResponse)
+async def create_lab_order(data: LabOrderCreate, current_user: dict = Depends(ehr_access_required)):
+    return await ehr_service.create_lab_order(data, str(current_user["_id"]))
+
+@router.get("/labs/visit/{visit_id}", response_model=List[LabOrderResponse])
+async def get_visit_labs(visit_id: str, current_user: dict = Depends(ehr_access_required)):
+    return await ehr_service.get_visit_lab_orders(visit_id)
+
+@router.get("/labs/patient/{patient_id}", response_model=List[LabOrderResponse])
+async def get_patient_labs(patient_id: str, current_user: dict = Depends(ehr_access_required)):
+    return await ehr_service.get_patient_lab_history(patient_id)
+
+@router.patch("/labs/{id}", response_model=LabOrderResponse)
+async def update_lab_order(id: str, data: LabOrderUpdate, current_user: dict = Depends(ehr_access_required)):
+    return await ehr_service.update_lab_order(id, data)
+
+# ── Referral Routes ──────────────────────────────────────────────────
+
+@router.post("/referrals", response_model=ReferralResponse)
+async def create_referral(data: ReferralCreate, current_user: dict = Depends(ehr_access_required)):
+    return await ehr_service.create_referral(data, str(current_user["_id"]))
+
+@router.get("/referrals/patient/{patient_id}", response_model=List[ReferralResponse])
+async def get_patient_referrals(patient_id: str, current_user: dict = Depends(ehr_access_required)):
+    return await ehr_service.get_patient_referrals(patient_id)
+
+@router.patch("/referrals/{id}", response_model=ReferralResponse)
+async def update_referral(id: str, data: ReferralUpdate, current_user: dict = Depends(doctor_admin_only)):
+    return await ehr_service.update_referral(id, data)
+
+# ── Document Study Routes ──────────────────────────────────────────
+
+@router.post("/documents/study/upload", response_model=DocumentStudyResponse)
+async def create_document_study(data: DocumentStudyCreate, current_user: dict = Depends(ehr_access_required)):
+    return await ehr_service.create_document_study(data, str(current_user["_id"]))
+
+@router.get("/documents/patient/{patient_id}", response_model=List[DocumentStudyResponse])
+async def get_patient_document_studies(patient_id: str, current_user: dict = Depends(ehr_access_required)):
+    return await ehr_service.get_patient_document_studies(patient_id)
+
+@router.patch("/documents/study/{id}", response_model=DocumentStudyResponse)
+async def update_document_study(id: str, data: DocumentStudyUpdate, current_user: dict = Depends(ehr_access_required)):
+    return await ehr_service.update_document_study(id, data)

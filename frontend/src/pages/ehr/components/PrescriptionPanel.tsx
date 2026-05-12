@@ -206,9 +206,9 @@ const PrescriptionPanel = () => {
   const isFinalized = prescription?.status === 'finalized';
 
   return (
-    <div className="grid grid-cols-12 gap-8 h-full">
+    <div className="flex flex-col lg:flex-row gap-8 min-h-full pb-20">
       {/* MAIN PRESCRIPTION WORKSPACE */}
-      <div className="col-span-12 lg:col-span-8 space-y-6">
+      <div className="flex-1 min-w-0 space-y-6">
         <div className="flex items-center justify-between mb-2">
            <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-100">
@@ -251,7 +251,7 @@ const PrescriptionPanel = () => {
         </div>
 
         {/* Prescription Sheet - Adopting A4 style from existing format */}
-        <Card className="rounded-none border-none shadow-2xl bg-white overflow-hidden min-h-[1123px] w-[794px] mx-auto flex flex-col relative print:shadow-none">
+        <Card className="rounded-2xl border border-slate-100 shadow-2xl bg-white overflow-hidden min-h-[1000px] w-full max-w-[950px] mx-auto flex flex-col relative print:shadow-none">
           {isFinalized && (
             <div className="absolute top-[20%] left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 pointer-events-none opacity-[0.03]">
                <div className="rotate-12 border-[20px] border-emerald-500 px-20 py-10 rounded-[4rem]">
@@ -307,7 +307,7 @@ const PrescriptionPanel = () => {
 
              {/* Rx Symbol */}
              <div className="pt-2">
-                <span className="text-5xl font-serif font-bold text-slate-900 select-none italic">Rx</span>
+                <span className="text-4xl font-serif font-bold text-indigo-600 select-none italic">Rx</span>
              </div>
 
              {/* Interaction Alerts */}
@@ -510,79 +510,67 @@ const PrescriptionPanel = () => {
       </div>
 
       {/* RIGHT SIDEBAR - HISTORY & CONTEXT */}
-      <div className="col-span-12 lg:col-span-4 space-y-6">
+      <div className="w-full lg:w-80 space-y-4">
          {/* Current Diagnosis Context */}
-         <Card className="rounded-3xl border-slate-100 shadow-xl shadow-slate-200/50 bg-white overflow-hidden">
-            <div className="bg-slate-900 px-6 py-4 flex items-center justify-between">
-               <h3 className="text-xs font-bold text-white uppercase tracking-[0.2em]">Primary Diagnosis</h3>
-               <Stethoscope className="h-4 w-4 text-white/50" />
+         <Card className="rounded-2xl border-slate-100 shadow-sm bg-white overflow-hidden">
+            <div className="bg-slate-900 px-4 py-2 flex items-center justify-between">
+               <h3 className="text-[10px] font-bold text-white uppercase tracking-[0.2em]">Primary Diagnosis</h3>
+               <Stethoscope className="h-3 w-3 text-white/50" />
             </div>
-            <CardContent className="p-6">
+            <CardContent className="p-4">
                {diagnosis ? (
-                 <div className="space-y-4">
+                 <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                       <Badge className="bg-indigo-600 text-white border-none rounded-lg text-[9px] font-bold px-2 py-0.5">{diagnosis.primary_diagnosis.code}</Badge>
-                       <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Active Link</span>
+                       <Badge className="bg-indigo-600 text-white border-none rounded-md text-[8px] font-bold px-1.5 py-0">
+                         {diagnosis.primary_diagnosis.code}
+                       </Badge>
+                       <span className="text-[8px] font-bold text-emerald-500 uppercase tracking-widest">Active Link</span>
                     </div>
-                    <p className="text-lg font-bold text-slate-800 leading-tight tracking-tight">{diagnosis.primary_diagnosis.label}</p>
-                    <div className="pt-2 border-t border-slate-50">
-                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Linked Comorbidities</p>
-                       <div className="flex flex-wrap gap-2">
-                          {diagnosis.secondary_diagnoses.map((d, i) => (
-                            <Badge key={i} variant="outline" className="border-slate-100 text-[9px] font-bold text-slate-500 bg-slate-50 px-2 py-0.5">{d.label.split(',')[0]}</Badge>
-                          ))}
-                       </div>
-                    </div>
+                    <p className="text-sm font-bold text-slate-800 leading-tight tracking-tight">{diagnosis.primary_diagnosis.label}</p>
                  </div>
                ) : (
-                 <div className="py-8 text-center space-y-3">
-                    <div className="h-10 w-10 rounded-xl bg-slate-50 flex items-center justify-center mx-auto">
-                       <AlertCircle className="h-5 w-5 text-slate-200" />
-                    </div>
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest italic">No clinical diagnosis found</p>
+                 <div className="py-4 text-center">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">No diagnosis</p>
                  </div>
                )}
             </CardContent>
          </Card>
 
          {/* Medication History */}
-         <Card className="rounded-[2rem] border-slate-100 shadow-xl shadow-slate-200/50 bg-white overflow-hidden">
-            <div className="bg-white px-6 py-4 border-b border-slate-50 flex items-center justify-between">
+         <Card className="rounded-2xl border-slate-100 shadow-sm bg-white overflow-hidden">
+            <div className="bg-white px-4 py-2 border-b border-slate-50 flex items-center justify-between">
                <div className="flex items-center gap-2">
-                  <History className="h-4 w-4 text-indigo-600" />
-                  <h3 className="text-[11px] font-bold text-slate-800 uppercase tracking-widest">Medication History</h3>
+                  <History className="h-3 w-3 text-indigo-600" />
+                  <h3 className="text-[10px] font-bold text-slate-800 uppercase tracking-widest">Medication History</h3>
                </div>
-               <Badge className="bg-indigo-50 text-indigo-600 border-none text-[9px] font-bold uppercase tracking-widest">{medicationHistory.length}</Badge>
+               <Badge className="bg-indigo-50 text-indigo-600 border-none text-[8px] font-bold uppercase tracking-widest">{medicationHistory.length}</Badge>
             </div>
-            <CardContent className="p-0 max-h-[500px] overflow-y-auto scrollbar-hide">
+            <CardContent className="p-0 max-h-[350px] overflow-y-auto scrollbar-hide">
                <div className="divide-y divide-slate-50">
                   {medicationHistory.length > 0 ? (
                     medicationHistory.map((history, i) => (
-                      <div key={i} className="p-6 hover:bg-slate-50 transition-colors group relative cursor-pointer" onClick={() => reuseMedication(history)}>
-                         <div className="flex justify-between items-start mb-2">
+                      <div key={i} className="p-4 hover:bg-slate-50 transition-colors group relative cursor-pointer" onClick={() => reuseMedication(history)}>
+                         <div className="flex justify-between items-start mb-1">
                             <div className="flex-1">
-                               <p className="text-sm font-bold text-slate-800 group-hover:text-indigo-600 transition-colors tracking-tight">{history.medicine_name}</p>
-                               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{history.dosage} • {history.frequency}</p>
+                               <p className="text-xs font-bold text-slate-800 group-hover:text-indigo-600 transition-colors tracking-tight">{history.medicine_name}</p>
+                               <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{history.dosage} • {history.frequency}</p>
                             </div>
-                            <div className="h-8 w-8 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 opacity-0 group-hover:opacity-100 transition-all scale-75 group-hover:scale-100">
-                               <Plus className="h-4 w-4" />
+                            <div className="h-6 w-6 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600 opacity-0 group-hover:opacity-100 transition-all scale-75 group-hover:scale-100">
+                               <Plus className="h-3 w-3" />
                             </div>
                          </div>
                          <div className="flex items-center justify-between">
-                            <span className="text-[9px] font-bold text-slate-400 bg-slate-100/50 px-2 py-0.5 rounded-full uppercase tracking-widest">{format(new Date(history.prescribed_at), 'MMM dd, yyyy')}</span>
-                            <span className="text-[9px] font-black text-indigo-500 uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">Add to Rx</span>
+                            <span className="text-[8px] font-bold text-slate-400 bg-slate-100/50 px-1.5 py-0.5 rounded-md uppercase tracking-widest">{format(new Date(history.prescribed_at), 'MMM dd, yyyy')}</span>
+                            <span className="text-[8px] font-black text-indigo-500 uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">Add to Rx</span>
                          </div>
                       </div>
                     ))
                   ) : (
-                    <div className="py-20 text-center space-y-4">
-                       <div className="h-16 w-16 rounded-[2rem] bg-slate-50 flex items-center justify-center mx-auto">
-                          <Clock className="h-8 w-8 text-slate-200" />
+                    <div className="py-12 text-center space-y-2">
+                       <div className="h-10 w-10 rounded-xl bg-slate-50 flex items-center justify-center mx-auto">
+                          <Clock className="h-5 w-5 text-slate-200" />
                        </div>
-                       <div className="space-y-1">
-                          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">No Med History</p>
-                          <p className="text-[9px] font-bold text-slate-300 uppercase tracking-widest">Start a new cycle</p>
-                       </div>
+                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">No history</p>
                     </div>
                   )}
                </div>
@@ -590,21 +578,21 @@ const PrescriptionPanel = () => {
          </Card>
 
          {/* Quick Knowledge / AI Ready Placeholder */}
-         <div className="p-6 rounded-[2rem] bg-indigo-600 text-white shadow-2xl shadow-indigo-200/50 space-y-4 relative overflow-hidden group">
-            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:rotate-12 transition-transform duration-500">
-               <Star className="h-16 w-16" />
+         <div className="p-4 rounded-2xl bg-indigo-600 text-white shadow-lg space-y-3 relative overflow-hidden group">
+            <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:rotate-12 transition-transform duration-500">
+               <Star className="h-10 w-10" />
             </div>
-            <div className="flex items-center gap-3">
-               <div className="h-10 w-10 rounded-2xl bg-white/20 flex items-center justify-center backdrop-blur-sm">
-                  <Star className="h-5 w-5 text-white" />
+            <div className="flex items-center gap-2">
+               <div className="h-7 w-7 rounded-lg bg-white/20 flex items-center justify-center backdrop-blur-sm">
+                  <Star className="h-3.5 w-3.5 text-white" />
                </div>
-               <span className="text-[11px] font-bold uppercase tracking-[0.2em]">Prescription AI</span>
+               <span className="text-[9px] font-bold uppercase tracking-[0.15em]">Prescription AI</span>
             </div>
-            <p className="text-xs text-indigo-100 font-medium leading-relaxed">
-               AI-driven dosage suggestions and conflict analysis foundation ready. Start documenting to initialize patterns.
+            <p className="text-[10px] text-indigo-100 font-medium leading-relaxed">
+               AI-driven dosage suggestions and conflict analysis ready.
             </p>
-            <Button className="w-full bg-white text-indigo-600 hover:bg-indigo-50 font-bold text-[10px] uppercase tracking-widest h-11 rounded-2xl shadow-lg border-none">
-               Learn Intelligence Patterns
+            <Button className="w-full bg-white text-indigo-600 hover:bg-indigo-50 font-bold text-[8px] uppercase tracking-widest h-8 rounded-xl shadow-md border-none">
+               View Insights
             </Button>
          </div>
       </div>

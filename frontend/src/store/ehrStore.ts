@@ -31,7 +31,7 @@ export interface Patient {
 }
 
 export interface TimelineItem {
-  type: 'visit' | 'soap' | 'prescription' | 'lab';
+  type: 'visit' | 'soap' | 'prescription' | 'lab' | 'referral' | 'document' | 'vitals' | 'diagnosis';
   title: string;
   timestamp: string;
   created_by: string;
@@ -134,6 +134,65 @@ export interface Diagnosis {
   updated_at: string;
 }
 
+export interface LabOrder {
+  id: string;
+  patient_id: string;
+  visit_id: string;
+  ordered_by: string;
+  department_id?: string;
+  category: string;
+  test_name: string;
+  urgency: 'Routine' | 'Priority' | 'Urgent' | 'STAT';
+  clinical_indication?: string;
+  notes?: string;
+  status: 'Ordered' | 'Sample Collected' | 'Processing' | 'Completed' | 'Reviewed';
+  ordered_at: string;
+  result_document_ids: string[];
+  findings?: string;
+  impression?: string;
+  radiologist_comments?: string;
+  technician_notes?: string;
+}
+
+export interface Referral {
+  id: string;
+  patient_id: string;
+  visit_id: string;
+  referred_by: string;
+  referred_doctor_id?: string;
+  referred_department_id?: string;
+  reason: string;
+  notes?: string;
+  priority: 'Routine' | 'Urgent' | 'Emergency';
+  status: 'Sent' | 'Accepted' | 'In Review' | 'Completed' | 'Rejected';
+  external_hospital?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DocumentFile {
+  file_url: string;
+  file_type: string;
+  uploaded_at: string;
+}
+
+export interface DocumentStudy {
+  id: string;
+  patient_id: string;
+  visit_id: string;
+  category: string;
+  body_part?: string;
+  uploaded_by: string;
+  findings?: string;
+  impression?: string;
+  clinical_context?: string;
+  files: DocumentFile[];
+  tags: string[];
+  status: 'Pending Review' | 'Reviewed' | 'Critical' | 'Archived';
+  created_at: string;
+  updated_at: string;
+}
+
 export type SoapSection = 'subjective' | 'objective' | 'assessment' | 'plan';
 
 // ─── State interface ─────────────────────────────────────────────────────────
@@ -158,6 +217,18 @@ interface EHRState {
   vitalsHistory: Vitals[];
   latestVitals: Vitals | null;
   vitalsLoading: boolean;
+
+  /** Labs state */
+  labOrders: LabOrder[];
+  labsLoading: boolean;
+
+  /** Referral state */
+  referrals: Referral[];
+  referralsLoading: boolean;
+
+  /** Documents state */
+  documentStudies: DocumentStudy[];
+  documentsLoading: boolean;
 
   // EHR actions
   fetchPatientEHR: (patientId: string) => Promise<void>;
@@ -207,6 +278,22 @@ interface EHRState {
   saveVitals: (data: Partial<Vitals>) => Promise<void>;
   updateVitals: (id: string, data: Partial<Vitals>) => Promise<void>;
   deleteVitals: (id: string) => Promise<void>;
+
+  // Lab actions
+  fetchLabs: (visitId: string) => Promise<void>;
+  fetchPatientLabs: (patientId: string) => Promise<void>;
+  createLabOrder: (data: Partial<LabOrder>) => Promise<void>;
+  updateLabOrder: (id: string, data: Partial<LabOrder>) => Promise<void>;
+
+  // Referral actions
+  fetchReferrals: (patientId: string) => Promise<void>;
+  createReferral: (data: Partial<Referral>) => Promise<void>;
+  updateReferral: (id: string, data: Partial<Referral>) => Promise<void>;
+
+  // Document Study actions
+  fetchDocumentStudies: (patientId: string) => Promise<void>;
+  createDocumentStudy: (data: Partial<DocumentStudy>) => Promise<void>;
+  updateDocumentStudy: (id: string, data: Partial<DocumentStudy>) => Promise<void>;
 }
 
 // ─── Store ───────────────────────────────────────────────────────────────────
@@ -228,6 +315,12 @@ export const useEHRStore = create<EHRState>((set, get) => ({
   vitalsHistory: [],
   latestVitals: null,
   vitalsLoading: false,
+  labOrders: [],
+  labsLoading: false,
+  referrals: [],
+  referralsLoading: false,
+  documentStudies: [],
+  documentsLoading: false,
 
   // ── EHR actions ──────────────────────────────────────────────────────────
 
@@ -317,6 +410,12 @@ export const useEHRStore = create<EHRState>((set, get) => ({
       vitalsHistory: [],
       latestVitals: null,
       vitalsLoading: false,
+      labOrders: [],
+      labsLoading: false,
+      referrals: [],
+      referralsLoading: false,
+      documentStudies: [],
+      documentsLoading: false,
     }),
 
   // ── SOAP actions ─────────────────────────────────────────────────────────
@@ -654,6 +753,174 @@ export const useEHRStore = create<EHRState>((set, get) => ({
     } catch (error) {
       console.error('Error deleting vitals:', error);
       set({ vitalsLoading: false });
+      throw error;
+    }
+  },
+
+  // ── Lab actions ────────────────────────────────────────────────────────
+
+  fetchLabs: async (visitId) => {
+    set({ labsLoading: true });
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await axios.get(`${API_URL}/ehr/labs/visit/${visitId}`, { headers });
+      set({ labOrders: res.data, labsLoading: false });
+    } catch (error) {
+      console.error('Error fetching labs:', error);
+      set({ labsLoading: false });
+    }
+  },
+
+  fetchPatientLabs: async (patientId) => {
+    set({ labsLoading: true });
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await axios.get(`${API_URL}/ehr/labs/patient/${patientId}`, { headers });
+      set({ labOrders: res.data, labsLoading: false });
+    } catch (error) {
+      console.error('Error fetching patient labs:', error);
+      set({ labsLoading: false });
+    }
+  },
+
+  createLabOrder: async (data) => {
+    set({ labsLoading: true });
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
+      await axios.post(`${API_URL}/ehr/labs/order`, data, { headers });
+      
+      const { currentVisit, currentPatient, fetchTimeline } = get();
+      if (currentVisit) get().fetchLabs(currentVisit.id);
+      if (currentPatient) fetchTimeline(currentPatient.id);
+      set({ labsLoading: false });
+    } catch (error) {
+      console.error('Error creating lab order:', error);
+      set({ labsLoading: false });
+      throw error;
+    }
+  },
+
+  updateLabOrder: async (id, data) => {
+    set({ labsLoading: true });
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
+      await axios.patch(`${API_URL}/ehr/labs/${id}`, data, { headers });
+      
+      const { currentVisit, currentPatient, fetchTimeline } = get();
+      if (currentVisit) get().fetchLabs(currentVisit.id);
+      if (currentPatient) fetchTimeline(currentPatient.id);
+      set({ labsLoading: false });
+    } catch (error) {
+      console.error('Error updating lab order:', error);
+      set({ labsLoading: false });
+      throw error;
+    }
+  },
+
+  // ── Referral actions ─────────────────────────────────────────────────────
+
+  fetchReferrals: async (patientId) => {
+    set({ referralsLoading: true });
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await axios.get(`${API_URL}/ehr/referrals/patient/${patientId}`, { headers });
+      set({ referrals: res.data, referralsLoading: false });
+    } catch (error) {
+      console.error('Error fetching referrals:', error);
+      set({ referralsLoading: false });
+    }
+  },
+
+  createReferral: async (data) => {
+    set({ referralsLoading: true });
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
+      await axios.post(`${API_URL}/ehr/referrals`, data, { headers });
+      
+      const { currentPatient, fetchTimeline } = get();
+      if (currentPatient) {
+        get().fetchReferrals(currentPatient.id);
+        fetchTimeline(currentPatient.id);
+      }
+      set({ referralsLoading: false });
+    } catch (error) {
+      console.error('Error creating referral:', error);
+      set({ referralsLoading: false });
+      throw error;
+    }
+  },
+
+  updateReferral: async (id, data) => {
+    set({ referralsLoading: true });
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
+      await axios.patch(`${API_URL}/ehr/referrals/${id}`, data, { headers });
+      
+      const { currentPatient } = get();
+      if (currentPatient) get().fetchReferrals(currentPatient.id);
+      set({ referralsLoading: false });
+    } catch (error) {
+      console.error('Error updating referral:', error);
+      set({ referralsLoading: false });
+      throw error;
+    }
+  },
+
+  // ── Document Study actions ──────────────────────────────────────────────
+
+  fetchDocumentStudies: async (patientId) => {
+    set({ documentsLoading: true });
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await axios.get(`${API_URL}/ehr/documents/patient/${patientId}`, { headers });
+      set({ documentStudies: res.data, documentsLoading: false });
+    } catch (error) {
+      console.error('Error fetching documents:', error);
+      set({ documentsLoading: false });
+    }
+  },
+
+  createDocumentStudy: async (data) => {
+    set({ documentsLoading: true });
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
+      await axios.post(`${API_URL}/ehr/documents/study/upload`, data, { headers });
+      
+      const { currentPatient, fetchTimeline } = get();
+      if (currentPatient) {
+        get().fetchDocumentStudies(currentPatient.id);
+        fetchTimeline(currentPatient.id);
+      }
+      set({ documentsLoading: false });
+    } catch (error) {
+      console.error('Error creating document study:', error);
+      set({ documentsLoading: false });
+      throw error;
+    }
+  },
+
+  updateDocumentStudy: async (id, data) => {
+    set({ documentsLoading: true });
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
+      await axios.patch(`${API_URL}/ehr/documents/study/${id}`, data, { headers });
+      
+      const { currentPatient } = get();
+      if (currentPatient) get().fetchDocumentStudies(currentPatient.id);
+      set({ documentsLoading: false });
+    } catch (error) {
+      console.error('Error updating document study:', error);
+      set({ documentsLoading: false });
       throw error;
     }
   },

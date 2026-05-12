@@ -10,6 +10,24 @@ class DocumentService:
     def __init__(self):
         self.collection_name = "documents"
 
+    def _serialize_ids(self, data: Any) -> Any:
+        """Recursively convert ObjectId to str and map _id to id."""
+        if isinstance(data, list):
+            return [self._serialize_ids(item) for item in data]
+        elif isinstance(data, dict):
+            # Map _id to id if present
+            if "_id" in data and "id" not in data:
+                data["id"] = str(data["_id"])
+            
+            # Remove _id if id is present (standardizing)
+            if "_id" in data and "id" in data:
+                del data["_id"]
+
+            return {k: self._serialize_ids(v) for k, v in data.items()}
+        elif isinstance(data, ObjectId):
+            return str(data)
+        return data
+
     async def upload_document(
         self, 
         patient_id: str, 
@@ -78,18 +96,12 @@ class DocumentService:
         documents.sort(key=lambda x: x.get("created_at", datetime.min), reverse=True)
         
         for doc in documents:
-            doc["id"] = str(doc["_id"])
-            doc["patient_id"] = str(doc["patient_id"])
-            doc["uploaded_by"] = str(doc["uploaded_by"])
-            del doc["_id"]
-
-            # Normalize file_url — handle legacy absolute paths stored by old buggy code.
-            # Always serve as /uploads/{filename} regardless of what is in the DB.
+            # Normalize file_url
             raw_url = doc.get("file_url", "")
             filename = os.path.basename(raw_url.replace("\\", "/"))
             doc["file_url"] = f"/uploads/{filename}" if filename else raw_url
 
-        return documents
+        return self._serialize_ids(documents)
 
     async def get_document_repository(self, search: str = None, file_type: str = None, start_date: str = None, end_date: str = None) -> Dict[str, Any]:
         db = get_database()
@@ -280,10 +292,10 @@ class DocumentService:
                 "patient_id": str(item["_id"])
             })
             
-        return {
+        return self._serialize_ids({
             "data": formatted_data,
             "total": len(formatted_data)
-        }
+        })
 
     async def delete_document(self, document_id: str, user_id: str, user_role: str) -> Dict[str, str]:
         db = get_database()
@@ -385,20 +397,9 @@ class DocumentService:
         studies = await db.document_studies.find({"patient_id": ObjectId(patient_id)}).to_list(100)
         
         for study in studies:
-            study["id"] = str(study["_id"])
-            study["patient_id"] = str(study["patient_id"])
-            study["uploaded_by"] = str(study["uploaded_by"])
-            if study.get("referring_doctor_id"):
-                study["referring_doctor_id"] = str(study["referring_doctor_id"])
-            del study["_id"]
-            
             # Fetch files for this study
-            files = await db.study_files.find({"study_id": ObjectId(study["id"])}).to_list(100)
+            files = await db.study_files.find({"study_id": study["_id"]}).to_list(100)
             for file in files:
-                file["id"] = str(file["_id"])
-                file["study_id"] = str(file["study_id"])
-                del file["_id"]
-                
                 # Normalize URL
                 raw_url = file.get("file_url", "")
                 filename = os.path.basename(raw_url.replace("\\", "/"))
@@ -408,7 +409,7 @@ class DocumentService:
             
         # Sort by scan_date or created_at
         studies.sort(key=lambda x: x.get("scan_date") or x.get("created_at") or datetime.min, reverse=True)
-        return studies
+        return self._serialize_ids(studies)
 
     async def get_study_by_id(self, study_id: str) -> Dict[str, Any]:
         db = get_database()
@@ -416,26 +417,16 @@ class DocumentService:
         if not study:
             raise HTTPException(status_code=404, detail="Study not found")
             
-        study["id"] = str(study["_id"])
-        study["patient_id"] = str(study["patient_id"])
-        study["uploaded_by"] = str(study["uploaded_by"])
-        if study.get("referring_doctor_id"):
-            study["referring_doctor_id"] = str(study["referring_doctor_id"])
-        del study["_id"]
-        
-        files = await db.study_files.find({"study_id": ObjectId(study_id)}).to_list(100)
+        # Fetch files
+        files = await db.study_files.find({"study_id": study["_id"]}).to_list(100)
         for file in files:
-            file["id"] = str(file["_id"])
-            file["study_id"] = str(file["study_id"])
-            del file["_id"]
-            
             # Normalize URL
             raw_url = file.get("file_url", "")
             filename = os.path.basename(raw_url.replace("\\", "/"))
             file["file_url"] = f"/uploads/{filename}" if filename else raw_url
             
         study["files"] = files
-        return study
+        return self._serialize_ids(study)
 
     async def get_all_studies(self, search: str = None, study_type: str = None) -> List[Dict[str, Any]]:
         db = get_database()
@@ -493,7 +484,7 @@ class DocumentService:
                 "patient_id": str(item["patient_id"])
             })
             
-        return formatted_data
+        return self._serialize_ids(formatted_data)
 
     async def delete_study(self, study_id: str, user_id: str, user_role: str) -> Dict[str, str]:
         db = get_database()
